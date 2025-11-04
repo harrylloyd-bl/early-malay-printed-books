@@ -12,4 +12,7 @@ dependencies:
   - matplotlib
   - certifi
   - pyyaml
+  - pip
+  - pip:
+    - pymupdf
 prefix: C:\Users\harrylloyd\miniforge3\envs\emp

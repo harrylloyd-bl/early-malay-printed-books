@@ -2,13 +2,14 @@ name: emp
 channels:
   - conda-forge
 dependencies:
-  - python=3.10
-  - pip
-  - typer
-  - loguru
+  - numpy
+  - ipykernel
   - tqdm
-  - ruff
+  - ca-certificates
+  - openssl
+  - pandas
   - pytest
-  - pip:
-    - python-dotenv
-    - -e .
+  - matplotlib
+  - certifi
+  - pyyaml
+prefix: C:\Users\harrylloyd\miniforge3\envs\emp

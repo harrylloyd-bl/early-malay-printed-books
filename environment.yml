@@ -1,0 +1,14 @@
+name: emp
+channels:
+  - conda-forge
+dependencies:
+  - python=3.10
+  - pip
+  - typer
+  - loguru
+  - tqdm
+  - ruff
+  - pytest
+  - pip:
+    - python-dotenv
+    - -e .

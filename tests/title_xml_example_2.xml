@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<PcGts xmlns="http://schema.primaresearch.org/PAGE/gts/pagecontent/2013-07-15" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://schema.primaresearch.org/PAGE/gts/pagecontent/2013-07-15 http://schema.primaresearch.org/PAGE/gts/pagecontent/2013-07-15/pagecontent.xsd">
+    <Metadata>
+        <Creator>prov=READ-COOP:name=PyLaia@TranskribusPlatform:version=1.2.0:model_id=36202:lm=none:date=04_02_2023_01:10</Creator>
+        <Created>2023-02-02T22:37:55</Created>
+        <LastChange>2023-02-04T01:10:20.395+01:00</LastChange>
+        <TranskribusMetadata docId="doc1" pageId="page1" pageNr="1" tsid="tsid1" status="IN_PROGRESS" userId="user" imgUrl="https://dummy_url.com" xmlUrl="https://dumm_xml_url.com" imageId="imageId1"/>
+    </Metadata>
+    <Page imageFilename="no_equivalent_image.jpg" imageWidth="3969" imageHeight="5755">
+        <ReadingOrder>
+            <OrderedGroup id="ro_1" caption="Regions reading order">
+                <RegionRefIndexed index="0" regionRef="TextRegion1"/>
+            </OrderedGroup>
+        </ReadingOrder>
+        <TextRegion id="TextRegion1" custom="readingOrder {index:0;} structure {type:column4;}">
+            <Coords points="3390,4614 3374,4614 3369,4625 3359,4619 3343,4625 3338,4619 3338,4602 3333,4608 3323,4608 3307,4597 3291,4602 3291,4619 3302,4630 3297,4636 3302,4647 3302,4698 3307,4698 3307,4692 3317,4687 3317,4659 3323,4653 3333,4653 3338,4664 3343,4653 3359,4653 3359,4647 3369,4642 3369,4636 3338,4636 3333,4642 3317,4630 3323,4625 3369,4625 3374,4619 3379,4625 3390,4619"/>
+            <TextLine id="TextLine1" custom="readingOrder {index:0;}">
+                <Coords points="357,652 1801,641 1801,578 357,558"/>
+                <Baseline points="367,631 427,627 487,627 547,623 607,619 667,619 727,619 787,623 847,619 907,619 967,619 1027,619 1087,623 1147,627 1207,627 1267,627 1327,627 1387,627 1447,627 1507,627 1567,631 1627,631 1687,631 1747,631 1803,635"/>
+                <TextEquiv>
+                    <Unicode>Bought in 1456</Unicode>
+                </TextEquiv>
+            </TextLine>
+            <TextLine id="TextLine2" custom="readingOrder {index:0;}">
+                <Coords points="357,652 1801,641 1801,578 357,558"/>
+                <Baseline points="367,631 427,627 487,627 547,623 607,619 667,619 727,619 787,623 847,619 907,619 967,619 1027,619 1087,623 1147,627 1207,627 1267,627 1327,627 1387,627 1447,627 1507,627 1567,631 1627,631 1687,631 1747,631 1803,635"/>
+                <TextEquiv>
+                    <Unicode>Unintentionally collected</Unicode>
+                </TextEquiv>
+            </TextLine>
+            <TextEquiv>
+                <Unicode></Unicode>
+            </TextEquiv>
+        </TextRegion>
+    </Page>
+</PcGts>

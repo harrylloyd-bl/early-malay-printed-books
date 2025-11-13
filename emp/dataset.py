@@ -1,29 +1,43 @@
-from pathlib import Path
+from copy import copy
 
-from loguru import logger
-from tqdm import tqdm
-import typer
+def find_headings(lines: list[str]) -> tuple[list[str], list[list[int]], list[str]]:
+    """
+    Finds all headings from a list of lines
+    :param lines: list[str]
+    :return: tuple[list[str], list[list[int]]
+    """
+    sm_titles = []  # The names of the titles
+    title_indices = []
+    ordered_lines = copy(lines)
+    # TODO include the first catalogue entry as well
+    for i, l in enumerate(lines):
+        sm = find_shelfmark(l)
+        if sm: 
+            title = [l]
+            title_index = []
+            j = 1
+            while i + j < len(lines) and j < 8:
+                title_part = lines[i + j]
+                if find_shelfmark(title_part):  # If a new catalogue entry begins during the current title
+                    break
 
-from emp.config import PROCESSED_DATA_DIR, RAW_DATA_DIR
+                title.append(title_part)
+                title_index.append(i + j)
+                j += 1
 
-app = typer.Typer()
+                if date_check(title_part) and caps_regex.search(" ". join(title)):  # Date marks the end of a heading
+                    sm_titles.append([sm, title])
+                    if "Bought in" in title[1]:  # not .lower() - these "Bought in" should all be capitalised
+                        sm, bought_in = lines[i], lines[i+1]
+                        ordered_lines[i], ordered_lines[i+1] = bought_in, sm
+                        title_indices.append(title_index[1:])
+                    else:
+                        title_indices.append(title_index)
+                    break
 
+    title_shelfmarks = [t[0] for t in sm_titles]
 
-@app.command()
-def main(
-    # ---- REPLACE DEFAULT PATHS AS APPROPRIATE ----
-    input_path: Path = RAW_DATA_DIR / "dataset.csv",
-    output_path: Path = PROCESSED_DATA_DIR / "dataset.csv",
-    # ----------------------------------------------
-):
-    # ---- REPLACE THIS WITH YOUR OWN CODE ----
-    logger.info("Processing dataset...")
-    for i in tqdm(range(10), total=10):
-        if i == 5:
-            logger.info("Something happened for iteration 5.")
-    logger.success("Processing dataset complete.")
-    # -----------------------------------------
+    return title_shelfmarks, title_indices, ordered_lines
 
 
-if __name__ == "__main__":
-    app()
+print("hello world")

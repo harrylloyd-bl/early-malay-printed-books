@@ -1,0 +1,853 @@
+﻿model,prompt,output,thinking
+Qwen3-235B-A22B-2507,"Please extract structured metadata from the following text. The text is an entry for a particular book title from a catalogue of books printed before 1925 in Malaysia.
+    Each book title entry is split into one or more editions, which are separated by a date explaining when the edition was published. Sometimes the date is missing, and the edition is marked by a letter.
+
+    In particular, please provide the following information:
+    – A list of editions
+    - For each edition information about the edition, this is split into different fields. Only use the fields listed below and provide detailed descriptions for each entity. Not every entry has every field. If a field is missing represent it as <empty> in the output json.
+    The predefined fields are:
+    - author
+    - publisher
+    - printer
+    - copyist
+    - contents
+    - Notes
+    - References
+    - Location
+    Any text not in these fields include in the outputs as 'unclassified_text'
+
+    Please format the output as valid json using the schema below:
+    {'$schema': 'http://json-schema.org/draft-04/schema#', 'type': 'object', 'properties': {'works': {'type': 'array', 'items': [{'type': 'object', 'properties': {'book_title': {'type': 'string'}, 'editions': {'type': 'array', 'items': [{'type': 'object', 'properties': {'edition_date': {'type': 'integer'}, 'edition_information': {'type': 'object', 'properties': {'author': {'type': 'string'}, 'publisher': {'type': 'string'}, 'printer': {'type': 'string'}, 'copyist': {'type': 'string'}, 'contents': {'type': 'string'}, 'Notes': {'type': 'string'}, 'References': {'type': 'string'}, 'Location': {'type': 'string'}, 'unclassified_text': {'type': 'string'}}, 'required': ['author', 'publisher', 'printer', 'copyist', 'contents', 'Notes', 'References', 'Location', 'unclassified_text']}}, 'required': ['edition_date', 'edition_information']}]}}, 'required': ['book_title', 'editions']}]}}, 'required': ['works']}
+
+    Make sure to provide a valid and well-formatted JSON adhering to the given schema.  
+
+    Content:
+    Abdullah dan Sabat
+1829
+Ceritera Hikayat Abdullah dan Sabat
+Singapore
+1829
+Contents:
+A summary of the story is
+given in The Christian in Singapore,
+no.1 (April 1861), pp.29-30.
+It
+concerns an apostacized Arab mufti of
+noble birth from Madras who wrote
+apologias for Christianity; he moved
+to Penang and was finally executed in
+Aceh
+Reference
+Medhurst, China, p.591
+1830
+2nd edition
+Ceritera Hikayat Abdullah dan Sabat
+[Tract no.6 :0 'Sullivan]
+publisher & printer: The S.C. [Singapore
+Chronicle]
+Singapore
+1830
+16pp. (1-16);
+typeset jawi, on 21 x 13
+cm pages, with 20 lines per page, in
+edition of 2000 copies
+R~~nc~
+.
+Logan Philological Library 1880, Item
+260 (no.325) [as 'Religious Tracts'];
+O'Sullivan,
+""London
+Missionary
+Society"", p.81
+Location
+NLS RBS 202 EMP (4) @ microform
+NL9930
+1836
+Ceritera Hikayat Abdullah dan Sabat
+author: T. Beighton
+Penang
+1836
+in edition of 1000 copies
+References
+Medhursl. China, p.591;
+Ibrahim, ""Early Printing"", pp.63-6S;
+O'Sullivan,
+""London
+Missionary
+Society"", p.91
+Location
+°SOAS CCWM UG/P, Beighton 1
+January
+1830 [?
+1837], with
+translation :O'Sullivan
+1837.a
+4th edition
+Ceritera Hikayat Abdullah dan Sabat
+author & publisher: Tuan Paderi Beighton
+Singapore
+1837
+ISpp. (1-15);
+typeset jawi, on 21 x 12.5
+cm pages, with 22 lines per page, in
+edition of 2000 copies
+Contents:
+1 story of Sabat, 13 Christ's
+teachings on redemption
+Notes:
+the first edition printed at
+American Mission Press
+Reference
+? Bibliotheque Favre 1888, item 3S3(88)
+[referring to ""Trois traites: livre de
+lecture
+pour
+I'amusement
+et
+l'instruction ""]
+Locations
+BL OIOC 14620.d.17(S) < Maison-
+neuve «Millies @ microform Or.
+Mic. SOlO;
+SOAS EB:82:445 338322(4) [in process]
+1837.b
+Hikayat Abdullah dan Sabat :htl
+[Singapore :BL]
+n.d.; [1837 :BL]
+24pp. (1-24);
+typeset jawi on 15 x 9.5
+em pages in unframed text block of 12
+x 7 em with 17 lines per page
+Contents:
+1 story of Sabat, 23
+concluding hymn
+Reference
+Bibliotheque Favre 1888, item 353(46)
+Locations
+BL OIOC 14620.b.13(6) < Maison-
+neuve [« Millies];
+°LC","{
+  ""$schema"": ""http://json-schema.org/draft-04/schema#"",
+  ""works"": [
+    {
+      ""book_title"": ""Abdullah dan Sabat"",
+      ""editions"": [
+        {
+          ""edition_date"": 1829,
+          ""edition_information"": {
+            ""author"": ""<empty>"",
+            ""publisher"": ""<empty>"",
+            ""printer"": ""<empty>"",
+            ""copyist"": ""<empty>"",
+            ""contents"": ""A summary of the story is given in The Christian in Singapore, no.1 (April 1861), pp.29-30. It concerns an apostacized Arab mufti of noble birth from Madras who wrote apologias for Christianity; he moved to Penang and was finally executed in Aceh"",
+            ""Notes"": ""<empty>"",
+            ""References"": ""Medhurst, China, p.591"",
+            ""Location"": ""<empty>"",
+            ""unclassified_text"": ""Ceritera Hikayat Abdullah dan Sabat\nSingapore""
+          }
+        },
+        {
+          ""edition_date"": 1830,
+          ""edition_information"": {
+            ""author"": ""<empty>"",
+            ""publisher"": ""The S.C. [Singapore Chronicle]"",
+            ""printer"": ""The S.C. [Singapore Chronicle]"",
+            ""copyist"": ""<empty>"",
+            ""contents"": ""16pp. (1-16); typeset jawi, on 21 x 13 cm pages, with 20 lines per page, in edition of 2000 copies"",
+            ""Notes"": ""2nd edition"",
+            ""References"": ""Logan Philological Library 1880, Item 260 (no.325) [as 'Religious Tracts']; O'Sullivan, \""London Missionary Society\"", p.81"",
+            ""Location"": ""NLS RBS 202 EMP (4) @ microform NL9930"",
+            ""unclassified_text"": ""Ceritera Hikayat Abdullah dan Sabat\n[Tract no.6 :0 'Sullivan]""
+          }
+        },
+        {
+          ""edition_date"": 1836,
+          ""edition_information"": {
+            ""author"": ""T. Beighton"",
+            ""publisher"": ""<empty>"",
+            ""printer"": ""<empty>"",
+            ""copyist"": ""<empty>"",
+            ""contents"": ""in edition of 1000 copies"",
+            ""Notes"": ""<empty>"",
+            ""References"": ""Medhursl. China, p.591; Ibrahim, \""Early Printing\"", pp.63-6S; O'Sullivan, \""London Missionary Society\"", p.91"",
+            ""Location"": ""°SOAS CCWM UG/P, Beighton 1"",
+            ""unclassified_text"": ""Ceritera Hikayat Abdullah dan Sabat\nPenang""
+          }
+        },
+        {
+          ""edition_date"": 1837,
+          ""edition_information"": {
+            ""author"": ""Tuan Paderi Beighton"",
+            ""publisher"": ""Tuan Paderi Beighton"",
+            ""printer"": ""<empty>"",
+            ""copyist"": ""<empty>"",
+            ""contents"": ""15pp. (1-15); typeset jawi, on 21 x 12.5 cm pages, with 22 lines per page, in edition of 2000 copies\nContents:\n1 story of Sabat, 13 Christ's teachings on redemption"",
+            ""Notes"": ""the first edition printed at American Mission Press"",
+            ""References"": ""? Bibliotheque Favre 1888, item 3S3(88) [referring to \""Trois traites: livre de lecture pour l'amusement et l'instruction \""]"",
+            ""Location"": ""BL OIOC 14620.d.17(S) < Maison-neuve «Millies @ microform Or. Mic. SOlO; SOAS EB:82:445 338322(4) [in process]"",
+            ""unclassified_text"": ""January 1830 [? 1837], with translation :O'Sullivan\n4th edition\nCeritera Hikayat Abdullah dan Sabat\nSingapore""
+          }
+        },
+        {
+          ""edition_date"": 1837,
+          ""edition_information"": {
+            ""author"": ""<empty>"",
+            ""publisher"": ""<empty>"",
+            ""printer"": ""<empty>"",
+            ""copyist"": ""<empty>"",
+            ""contents"": ""24pp. (1-24); typeset jawi on 15 x 9.5 cm pages in unframed text block of 12 x 7 em with 17 lines per page\nContents:\n1 story of Sabat, 23 concluding hymn"",
+            ""Notes"": ""<empty>"",
+            ""References"": ""Bibliotheque Favre 1888, item 353(46)"",
+            ""Location"": ""BL OIOC 14620.b.13(6) < Maison-neuve [« Millies]; °LC"",
+            ""unclassified_text"": ""Hikayat Abdullah dan Sabat :htl\n[Singapore :BL]\nn.d.; [1837 :BL]""
+          }
+        }
+      ]
+    }
+  ]
+}",FALSE
+Qwen3-235B-A22B-2507,"Please extract structured metadata from the following text. The text is an entry for a particular book title from a catalogue of books printed before 1925 in Malaysia.
+    Each book title entry is split into one or more editions, which are separated by a date explaining when the edition was published. Sometimes the date is missing, and the edition is marked by a letter.
+
+    In particular, please provide the following information:
+    – A list of editions
+    - For each edition information about the edition, this is split into different fields. Only use the fields listed below and provide detailed descriptions for each entity. Not every entry has every field. If a field is missing represent it as <empty> in the output json.
+    The predefined fields are:
+    - author
+    - publisher
+    - printer
+    - copyist
+    - contents
+    - Notes
+    - References
+    - Location
+    Any text not in these fields include in the outputs as 'unclassified_text'
+
+    Please format the output as valid json using the schema below:
+    {'$schema': 'http://json-schema.org/draft-04/schema#', 'type': 'object', 'properties': {'works': {'type': 'array', 'items': [{'type': 'object', 'properties': {'book_title': {'type': 'string'}, 'editions': {'type': 'array', 'items': [{'type': 'object', 'properties': {'edition_date': {'type': 'integer'}, 'edition_information': {'type': 'object', 'properties': {'author': {'type': 'string'}, 'publisher': {'type': 'string'}, 'printer': {'type': 'string'}, 'copyist': {'type': 'string'}, 'contents': {'type': 'string'}, 'Notes': {'type': 'string'}, 'References': {'type': 'string'}, 'Location': {'type': 'string'}, 'unclassified_text': {'type': 'string'}}, 'required': ['author', 'publisher', 'printer', 'copyist', 'contents', 'Notes', 'References', 'Location', 'unclassified_text']}}, 'required': ['edition_date', 'edition_information']}]}}, 'required': ['book_title', 'editions']}]}}, 'required': ['works']}
+
+    Make sure to provide a valid and well-formatted JSON adhering to the given schema.  
+
+    Content:
+    Abdullah dan Sabat
+1829
+Ceritera Hikayat Abdullah dan Sabat
+Singapore
+1829
+Contents:
+A summary of the story is
+given in The Christian in Singapore,
+no.1 (April 1861), pp.29-30.
+It
+concerns an apostacized Arab mufti of
+noble birth from Madras who wrote
+apologias for Christianity; he moved
+to Penang and was finally executed in
+Aceh
+Reference
+Medhurst, China, p.591
+1830
+2nd edition
+Ceritera Hikayat Abdullah dan Sabat
+[Tract no.6 :0 'Sullivan]
+publisher & printer: The S.C. [Singapore
+Chronicle]
+Singapore
+1830
+16pp. (1-16);
+typeset jawi, on 21 x 13
+cm pages, with 20 lines per page, in
+edition of 2000 copies
+R~~nc~
+.
+Logan Philological Library 1880, Item
+260 (no.325) [as 'Religious Tracts'];
+O'Sullivan,
+""London
+Missionary
+Society"", p.81
+Location
+NLS RBS 202 EMP (4) @ microform
+NL9930
+1836
+Ceritera Hikayat Abdullah dan Sabat
+author: T. Beighton
+Penang
+1836
+in edition of 1000 copies
+References
+Medhursl. China, p.591;
+Ibrahim, ""Early Printing"", pp.63-6S;
+O'Sullivan,
+""London
+Missionary
+Society"", p.91
+Location
+°SOAS CCWM UG/P, Beighton 1
+January
+1830 [?
+1837], with
+translation :O'Sullivan
+1837.a
+4th edition
+Ceritera Hikayat Abdullah dan Sabat
+author & publisher: Tuan Paderi Beighton
+Singapore
+1837
+ISpp. (1-15);
+typeset jawi, on 21 x 12.5
+cm pages, with 22 lines per page, in
+edition of 2000 copies
+Contents:
+1 story of Sabat, 13 Christ's
+teachings on redemption
+Notes:
+the first edition printed at
+American Mission Press
+Reference
+? Bibliotheque Favre 1888, item 3S3(88)
+[referring to ""Trois traites: livre de
+lecture
+pour
+I'amusement
+et
+l'instruction ""]
+Locations
+BL OIOC 14620.d.17(S) < Maison-
+neuve «Millies @ microform Or.
+Mic. SOlO;
+SOAS EB:82:445 338322(4) [in process]
+1837.b
+Hikayat Abdullah dan Sabat :htl
+[Singapore :BL]
+n.d.; [1837 :BL]
+24pp. (1-24);
+typeset jawi on 15 x 9.5
+em pages in unframed text block of 12
+x 7 em with 17 lines per page
+Contents:
+1 story of Sabat, 23
+concluding hymn
+Reference
+Bibliotheque Favre 1888, item 353(46)
+Locations
+BL OIOC 14620.b.13(6) < Maison-
+neuve [« Millies];
+°LC","{
+  ""$schema"": ""http://json-schema.org/draft-04/schema#"",
+  ""works"": [
+    {
+      ""book_title"": ""Abdullah dan Sabat"",
+      ""editions"": [
+        {
+          ""edition_date"": 1829,
+          ""edition_information"": {
+            ""author"": ""<empty>"",
+            ""publisher"": ""<empty>"",
+            ""printer"": ""<empty>"",
+            ""copyist"": ""<empty>"",
+            ""contents"": ""A summary of the story is\ngiven in The Christian in Singapore,\nno.1 (April 1861), pp.29-30.\nIt\nconcerns an apostacized Arab mufti of\nnoble birth from Madras who wrote\napologias for Christianity; he moved\nto Penang and was finally executed in\nAceh"",
+            ""Notes"": ""<empty>"",
+            ""References"": ""Medhurst, China, p.591"",
+            ""Location"": ""<empty>"",
+            ""unclassified_text"": ""Ceritera Hikayat Abdullah dan Sabat\nSingapore\n1829""
+          }
+        },
+        {
+          ""edition_date"": 1830,
+          ""edition_information"": {
+            ""author"": ""<empty>"",
+            ""publisher"": ""The S.C. [Singapore Chronicle]"",
+            ""printer"": ""The S.C. [Singapore Chronicle]"",
+            ""copyist"": ""<empty>"",
+            ""contents"": ""<empty>"",
+            ""Notes"": ""2nd edition"",
+            ""References"": ""Logan Philological Library 1880, Item\n260 (no.325) [as 'Religious Tracts'];\nO'Sullivan,\n\""London\nMissionary\nSociety\"", p.81"",
+            ""Location"": ""NLS RBS 202 EMP (4) @ microform\nNL9930"",
+            ""unclassified_text"": ""Ceritera Hikayat Abdullah dan Sabat\n[Tract no.6 :0 'Sullivan]\nSingapore\n1830\n16pp. (1-16);\ntypeset jawi, on 21 x 13\ncm pages, with 20 lines per page, in\nedition of 2000 copies\nR~~nc~\n.""
+          }
+        },
+        {
+          ""edition_date"": 1836,
+          ""edition_information"": {
+            ""author"": ""T. Beighton"",
+            ""publisher"": ""<empty>"",
+            ""printer"": ""<empty>"",
+            ""copyist"": ""<empty>"",
+            ""contents"": ""in edition of 1000 copies"",
+            ""Notes"": ""<empty>"",
+            ""References"": ""Medhursl. China, p.591;\nIbrahim, \""Early Printing\"", pp.63-6S;\nO'Sullivan,\n\""London\nMissionary\nSociety\"", p.91"",
+            ""Location"": ""°SOAS CCWM UG/P, Beighton 1"",
+            ""unclassified_text"": ""Ceritera Hikayat Abdullah dan Sabat\nPenang""
+          }
+        },
+        {
+          ""edition_date"": 1837,
+          ""edition_information"": {
+            ""author"": ""Tuan Paderi Beighton"",
+            ""publisher"": ""Tuan Paderi Beighton"",
+            ""printer"": ""<empty>"",
+            ""copyist"": ""<empty>"",
+            ""contents"": ""1 story of Sabat, 13 Christ's\nteachings on redemption"",
+            ""Notes"": ""the first edition printed at\nAmerican Mission Press"",
+            ""References"": ""? Bibliotheque Favre 1888, item 3S3(88)\n[referring to \""Trois traites: livre de\nlecture\npour\nI'amusement\net\nl'instruction \""]"",
+            ""Location"": ""BL OIOC 14620.d.17(S) < Maison-\nneuve «Millies @ microform Or.\nMic. SOlO;\nSOAS EB:82:445 338322(4) [in process]"",
+            ""unclassified_text"": ""January 1830 [? 1837], with translation :O'Sullivan\n4th edition\nCeritera Hikayat Abdullah dan Sabat\nSingapore\n1837\nISpp. (1-15);\ntypeset jawi, on 21 x 12.5\ncm pages, with 22 lines per page, in\nedition of 2000 copies""
+          }
+        },
+        {
+          ""edition_date"": 1837,
+          ""edition_information"": {
+            ""author"": ""<empty>"",
+            ""publisher"": ""<empty>"",
+            ""printer"": ""<empty>"",
+            ""copyist"": ""<empty>"",
+            ""contents"": ""1 story of Sabat, 23\nconcluding hymn"",
+            ""Notes"": ""<empty>"",
+            ""References"": ""Bibliotheque Favre 1888, item 353(46)"",
+            ""Location"": ""BL OIOC 14620.b.13(6) < Maison-\nneuve [« Millies];\n°LC"",
+            ""unclassified_text"": ""Hikayat Abdullah dan Sabat :htl\n[Singapore :BL]\nn.d.; [1837 :BL]\n24pp. (1-24);\ntypeset jawi on 15 x 9.5\nem pages in unframed text block of 12\nx 7 em with 17 lines per page""
+          }
+        }
+      ]
+    }
+  ]
+}",TRUE
+Qwen3-235B-A22B-2507,"Please extract structured metadata from the following text. The text is an entry for a particular book title from a catalogue of books printed before 1925 in Malaysia.
+    Each book title entry is split into one or more editions, which are separated by a date explaining when the edition was published. Sometimes the date is missing, and the edition is marked by a letter.
+
+    In particular, please provide the following information:
+    – A list of editions
+    - For each edition information about the edition, this is split into different fields. Only use the fields listed below and provide detailed descriptions for each entity. Not every entry has every field. If a field is missing represent it as <empty> in the output json.
+    The predefined fields are:
+    - author
+    - publisher
+    - printer
+    - copyist
+    - contents
+    - Notes
+    - References
+    - Location
+    Any text not in these fields include in the outputs as 'unclassified_text'
+
+    Please format the output as valid json using the schema below:
+    {'$schema': 'http://json-schema.org/draft-04/schema#', 'type': 'object', 'properties': {'works': {'type': 'array', 'items': [{'type': 'object', 'properties': {'book_title': {'type': 'string'}, 'editions': {'type': 'array', 'items': [{'type': 'object', 'properties': {'edition_date': {'type': 'integer'}, 'edition_information': {'type': 'object', 'properties': {'author': {'type': 'string'}, 'publisher': {'type': 'string'}, 'printer': {'type': 'string'}, 'copyist': {'type': 'string'}, 'contents': {'type': 'string'}, 'Notes': {'type': 'string'}, 'References': {'type': 'string'}, 'Location': {'type': 'string'}, 'unclassified_text': {'type': 'string'}}, 'required': ['author', 'publisher', 'printer', 'copyist', 'contents', 'Notes', 'References', 'Location', 'unclassified_text']}}, 'required': ['edition_date', 'edition_information']}]}}, 'required': ['book_title', 'editions']}]}}, 'required': ['works']}
+
+    Make sure to provide a valid and well-formatted JSON adhering to the given schema.  
+
+    Content:
+    Abdullah dan Sabat
+1829
+Ceritera Hikayat Abdullah dan Sabat
+Singapore
+1829
+Contents:
+A summary of the story is
+given in The Christian in Singapore,
+no.1 (April 1861), pp.29-30.
+It
+concerns an apostacized Arab mufti of
+noble birth from Madras who wrote
+apologias for Christianity; he moved
+to Penang and was finally executed in
+Aceh
+Reference
+Medhurst, China, p.591
+1830
+2nd edition
+Ceritera Hikayat Abdullah dan Sabat
+[Tract no.6 :0 'Sullivan]
+publisher & printer: The S.C. [Singapore
+Chronicle]
+Singapore
+1830
+16pp. (1-16);
+typeset jawi, on 21 x 13
+cm pages, with 20 lines per page, in
+edition of 2000 copies
+R~~nc~
+.
+Logan Philological Library 1880, Item
+260 (no.325) [as 'Religious Tracts'];
+O'Sullivan,
+""London
+Missionary
+Society"", p.81
+Location
+NLS RBS 202 EMP (4) @ microform
+NL9930
+1836
+Ceritera Hikayat Abdullah dan Sabat
+author: T. Beighton
+Penang
+1836
+in edition of 1000 copies
+References
+Medhursl. China, p.591;
+Ibrahim, ""Early Printing"", pp.63-6S;
+O'Sullivan,
+""London
+Missionary
+Society"", p.91
+Location
+°SOAS CCWM UG/P, Beighton 1
+January
+1830 [?
+1837], with
+translation :O'Sullivan
+1837.a
+4th edition
+Ceritera Hikayat Abdullah dan Sabat
+author & publisher: Tuan Paderi Beighton
+Singapore
+1837
+ISpp. (1-15);
+typeset jawi, on 21 x 12.5
+cm pages, with 22 lines per page, in
+edition of 2000 copies
+Contents:
+1 story of Sabat, 13 Christ's
+teachings on redemption
+Notes:
+the first edition printed at
+American Mission Press
+Reference
+? Bibliotheque Favre 1888, item 3S3(88)
+[referring to ""Trois traites: livre de
+lecture
+pour
+I'amusement
+et
+l'instruction ""]
+Locations
+BL OIOC 14620.d.17(S) < Maison-
+neuve «Millies @ microform Or.
+Mic. SOlO;
+SOAS EB:82:445 338322(4) [in process]
+1837.b
+Hikayat Abdullah dan Sabat :htl
+[Singapore :BL]
+n.d.; [1837 :BL]
+24pp. (1-24);
+typeset jawi on 15 x 9.5
+em pages in unframed text block of 12
+x 7 em with 17 lines per page
+Contents:
+1 story of Sabat, 23
+concluding hymn
+Reference
+Bibliotheque Favre 1888, item 353(46)
+Locations
+BL OIOC 14620.b.13(6) < Maison-
+neuve [« Millies];
+°LC
+    ","{
+  ""$schema"": ""http://json-schema.org/draft-04/schema#"",
+  ""works"": [
+    {
+      ""book_title"": ""Abdullah dan Sabat"",
+      ""editions"": [
+        {
+          ""edition_date"": 1829,
+          ""edition_information"": {
+            ""author"": ""<empty>"",
+            ""publisher"": ""<empty>"",
+            ""printer"": ""<empty>"",
+            ""copyist"": ""<empty>"",
+            ""contents"": ""A summary of the story is\ngiven in The Christian in Singapore,\nno.1 (April 1861), pp.29-30.\nIt\nconcerns an apostacized Arab mufti of\nnoble birth from Madras who wrote\napologias for Christianity; he moved\nto Penang and was finally executed in\nAceh"",
+            ""Notes"": ""<empty>"",
+            ""References"": ""Medhurst, China, p.591"",
+            ""Location"": ""<empty>"",
+            ""unclassified_text"": ""Ceritera Hikayat Abdullah dan Sabat\nSingapore""
+          }
+        },
+        {
+          ""edition_date"": 1830,
+          ""edition_information"": {
+            ""author"": ""<empty>"",
+            ""publisher"": ""The S.C. [Singapore Chronicle]"",
+            ""printer"": ""The S.C. [Singapore Chronicle]"",
+            ""copyist"": ""<empty>"",
+            ""contents"": ""<empty>"",
+            ""Notes"": ""2nd edition"",
+            ""References"": ""Logan Philological Library 1880, Item 260 (no.325) [as 'Religious Tracts'];\nO'Sullivan,\n\""London\nMissionary\nSociety\"", p.81"",
+            ""Location"": ""NLS RBS 202 EMP (4) @ microform\nNL9930"",
+            ""unclassified_text"": ""Ceritera Hikayat Abdullah dan Sabat\n[Tract no.6 :0 'Sullivan]\nSingapore\n16pp. (1-16);\ntypeset jawi, on 21 x 13\ncm pages, with 20 lines per page, in\nedition of 2000 copies""
+          }
+        },
+        {
+          ""edition_date"": 1836,
+          ""edition_information"": {
+            ""author"": ""T. Beighton"",
+            ""publisher"": ""<empty>"",
+            ""printer"": ""<empty>"",
+            ""copyist"": ""<empty>"",
+            ""contents"": ""in edition of 1000 copies"",
+            ""Notes"": ""<empty>"",
+            ""References"": ""Medhursl. China, p.591;\nIbrahim, \""Early Printing\"", pp.63-6S;\nO'Sullivan,\n\""London\nMissionary\nSociety\"", p.91"",
+            ""Location"": ""°SOAS CCWM UG/P, Beighton 1"",
+            ""unclassified_text"": ""Ceritera Hikayat Abdullah dan Sabat\nPenang\nJanuary\n1830 [?\n1837], with\ntranslation :O'Sullivan""
+          }
+        },
+        {
+          ""edition_date"": 1837,
+          ""edition_information"": {
+            ""author"": ""Tuan Paderi Beighton"",
+            ""publisher"": ""Tuan Paderi Beighton"",
+            ""printer"": ""<empty>"",
+            ""copyist"": ""<empty>"",
+            ""contents"": ""1 story of Sabat, 13 Christ's\nteachings on redemption"",
+            ""Notes"": ""the first edition printed at\nAmerican Mission Press"",
+            ""References"": ""? Bibliotheque Favre 1888, item 3S3(88)\n[referring to \""Trois traites: livre de\nlecture\npour\nI'amusement\net\nl'instruction \""]"",
+            ""Location"": ""BL OIOC 14620.d.17(S) < Maison-\nneuve «Millies @ microform Or.\nMic. SOlO;\nSOAS EB:82:445 338322(4) [in process]"",
+            ""unclassified_text"": ""4th edition\nCeritera Hikayat Abdullah dan Sabat\nSingapore\nISpp. (1-15);\ntypeset jawi, on 21 x 12.5\ncm pages, with 22 lines per page, in\nedition of 2000 copies""
+          }
+        },
+        {
+          ""edition_date"": 1837,
+          ""edition_information"": {
+            ""author"": ""<empty>"",
+            ""publisher"": ""<empty>"",
+            ""printer"": ""<empty>"",
+            ""copyist"": ""<empty>"",
+            ""contents"": ""1 story of Sabat, 23\nconcluding hymn"",
+            ""Notes"": ""<empty>"",
+            ""References"": ""Bibliotheque Favre 1888, item 353(46)"",
+            ""Location"": ""BL OIOC 14620.b.13(6) < Maison-\nneuve [« Millies];\n°LC"",
+            ""unclassified_text"": ""Hikayat Abdullah dan Sabat :htl\n[Singapore :BL]\nn.d.; [1837 :BL]\n24pp. (1-24);\ntypeset jawi on 15 x 9.5\nem pages in unframed text block of 12\nx 7 em with 17 lines per page""
+          }
+        }
+      ]
+    }
+  ]
+}",TRUE
+Qwen3-235B-A22B-2507,"Please extract structured metadata from the following text. The text is an entry for a particular book title from a catalogue of books printed before 1925 in Malaysia.
+    The text has been extracted from a pdf using optical character recognition and may contain errors. Do not correct these errors, but attempt to understand the correct words when extracting information.
+    The text is split using line breaks. These separate lines in the OCR, but extra, unnecessary line breaks have sometimes been added between text from the same line. Each book title entry is split into one or more editions. Each edition starts with an edition name in one of three formats:
+    1) A year
+    2) A year followed by a full stop then a letter (if there are multiple editions for one year)
+    3) A letter (if the date of publication is unknown)
+
+    The text for each edition normally reprints the edition date within it. The text for each edition contains different fields you should extract.
+    These fields are marked by the field heading, and fields may run over multiple lines. All text before the next field heading belongs to that field. Not every entry has every field.
+    Field headings are case insensitive. The Reference and Location fields are not usually followed by a colon. The other fields are followed by a colon.
+    Sometimes fields are combined, such as 'author & proprietor', or 'publisher & printer'. In these cases repeat the information in text in the author and proprietor fields of the output.
+    Field headings are:
+    - author
+    - proprietor
+    - publisher
+    - printer
+    - copyist
+    - contents
+    - Notes
+    - Reference(s)
+    - Location(s)
+
+    There is also a title field, which consists of all text between the edition name and the fields listed above. Extract this text as a 'title' field
+
+    Please extract the following information in json format. Only use the fields listed below. Not every entry has every field. If a field is missing represent it as <empty> in the output json.
+    - edition name
+    - title
+    - author
+    - publisher
+    - printer
+    - copyist
+    - contents
+    - Notes
+    - References
+    - Location
+    Any text not in these fields include in the output json as a seperate field called 'unclassified_text'
+
+    Please format the output as valid json using the schema below. Make sure to provide a valid and well-formatted JSON adhering to the given schema. Do not make up any information, only use what is provided in the text.
+    {'$schema': 'http://json-schema.org/draft-04/schema#', 'type': 'object', 'properties': {'works': {'type': 'array', 'items': [{'type': 'object', 'properties': {'editions': {'type': 'array', 'items': [{'type': 'object', 'properties': {'edition_name': {'type': 'string'}, 'edition_information': {'type': 'object', 'properties': {'author': {'type': 'string'}, 'proprietor': {'type': 'string'}, 'publisher': {'type': 'string'}, 'printer': {'type': 'string'}, 'copyist': {'type': 'string'}, 'contents': {'type': 'string'}, 'Notes': {'type': 'string'}, 'References': {'type': 'string'}, 'Location': {'type': 'string'}, 'unclassified_text': {'type': 'string'}}, 'required': ['author', 'proprietor', 'publisher', 'printer', 'copyist', 'contents', 'Notes', 'References', 'Location', 'unclassified_text']}}, 'required': ['edition_name', 'edition_information']}]}}, 'required': ['editions']}]}}, 'required': ['works']}    
+
+    Content:
+    Abdullah dan Sabat
+1829
+Ceritera Hikayat Abdullah dan Sabat
+Singapore
+1829
+Contents:
+A summary of the story is
+given in The Christian in Singapore,
+no.1 (April 1861), pp.29-30.
+It
+concerns an apostacized Arab mufti of
+noble birth from Madras who wrote
+apologias for Christianity; he moved
+to Penang and was finally executed in
+Aceh
+Reference
+Medhurst, China, p.591
+1830
+2nd edition
+Ceritera Hikayat Abdullah dan Sabat
+[Tract no.6 :0 'Sullivan]
+publisher & printer: The S.C. [Singapore
+Chronicle]
+Singapore
+1830
+16pp. (1-16);
+typeset jawi, on 21 x 13
+cm pages, with 20 lines per page, in
+edition of 2000 copies
+R~~nc~
+.
+Logan Philological Library 1880, Item
+260 (no.325) [as 'Religious Tracts'];
+O'Sullivan,
+""London
+Missionary
+Society"", p.81
+Location
+NLS RBS 202 EMP (4) @ microform
+NL9930
+1836
+Ceritera Hikayat Abdullah dan Sabat
+author: T. Beighton
+Penang
+1836
+in edition of 1000 copies
+References
+Medhursl. China, p.591;
+Ibrahim, ""Early Printing"", pp.63-6S;
+O'Sullivan,
+""London
+Missionary
+Society"", p.91
+Location
+°SOAS CCWM UG/P, Beighton 1
+January
+1830 [?
+1837], with
+translation :O'Sullivan
+1837.a
+4th edition
+Ceritera Hikayat Abdullah dan Sabat
+author & publisher: Tuan Paderi Beighton
+Singapore
+1837
+ISpp. (1-15);
+typeset jawi, on 21 x 12.5
+cm pages, with 22 lines per page, in
+edition of 2000 copies
+Contents:
+1 story of Sabat, 13 Christ's
+teachings on redemption
+Notes:
+the first edition printed at
+American Mission Press
+Reference
+? Bibliotheque Favre 1888, item 3S3(88)
+[referring to ""Trois traites: livre de
+lecture
+pour
+I'amusement
+et
+l'instruction ""]
+Locations
+BL OIOC 14620.d.17(S) < Maison-
+neuve «Millies @ microform Or.
+Mic. SOlO;
+SOAS EB:82:445 338322(4) [in process]
+1837.b
+Hikayat Abdullah dan Sabat :htl
+[Singapore :BL]
+n.d.; [1837 :BL]
+24pp. (1-24);
+typeset jawi on 15 x 9.5
+em pages in unframed text block of 12
+x 7 em with 17 lines per page
+Contents:
+1 story of Sabat, 23
+concluding hymn
+Reference
+Bibliotheque Favre 1888, item 353(46)
+Locations
+BL OIOC 14620.b.13(6) < Maison-
+neuve [« Millies];
+°LC
+    ","{
+  ""$schema"": ""http://json-schema.org/draft-04/schema#"",
+  ""works"": [
+    {
+      ""editions"": [
+        {
+          ""edition_name"": ""1829"",
+          ""edition_information"": {
+            ""author"": ""<empty>"",
+            ""proprietor"": ""<empty>"",
+            ""publisher"": ""<empty>"",
+            ""printer"": ""<empty>"",
+            ""copyist"": ""<empty>"",
+            ""contents"": ""A summary of the story is\ngiven in The Christian in Singapore,\nno.1 (April 1861), pp.29-30.\nIt\nconcerns an apostacized Arab mufti of\nnoble birth from Madras who wrote\napologias for Christianity; he moved\nto Penang and was finally executed in\nAceh"",
+            ""Notes"": ""<empty>"",
+            ""References"": ""Medhurst, China, p.591"",
+            ""Location"": ""<empty>"",
+            ""unclassified_text"": ""Abdullah dan Sabat\nCeritera Hikayat Abdullah dan Sabat\nSingapore""
+          }
+        },
+        {
+          ""edition_name"": ""1830"",
+          ""edition_information"": {
+            ""author"": ""<empty>"",
+            ""proprietor"": ""<empty>"",
+            ""publisher"": ""The S.C. [Singapore Chronicle]"",
+            ""printer"": ""The S.C. [Singapore Chronicle]"",
+            ""copyist"": ""<empty>"",
+            ""contents"": ""<empty>"",
+            ""Notes"": ""2nd edition"",
+            ""References"": ""Logan Philological Library 1880, Item\n260 (no.325) [as 'Religious Tracts'];\nO'Sullivan,\n\""London\nMissionary\nSociety\"", p.81"",
+            ""Location"": ""NLS RBS 202 EMP (4) @ microform\nNL9930"",
+            ""unclassified_text"": ""Ceritera Hikayat Abdullah dan Sabat\n[Tract no.6 :0 'Sullivan]\nSingapore\n16pp. (1-16);\ntypeset jawi, on 21 x 13\ncm pages, with 20 lines per page, in\nedition of 2000 copies\nR~~nc~\n.""
+          }
+        },
+        {
+          ""edition_name"": ""1836"",
+          ""edition_information"": {
+            ""author"": ""T. Beighton"",
+            ""proprietor"": ""<empty>"",
+            ""publisher"": ""<empty>"",
+            ""printer"": ""<empty>"",
+            ""copyist"": ""<empty>"",
+            ""contents"": ""in edition of 1000 copies"",
+            ""Notes"": ""<empty>"",
+            ""References"": ""Medhursl. China, p.591;\nIbrahim, \""Early Printing\"", pp.63-6S;\nO'Sullivan,\n\""London\nMissionary\nSociety\"", p.91"",
+            ""Location"": ""°SOAS CCWM UG/P, Beighton 1"",
+            ""unclassified_text"": ""Ceritera Hikayat Abdullah dan Sabat\nPenang\nJanuary\n1830 [?\n1837], with\ntranslation :O'Sullivan""
+          }
+        },
+        {
+          ""edition_name"": ""1837.a"",
+          ""edition_information"": {
+            ""author"": ""Tuan Paderi Beighton"",
+            ""proprietor"": ""<empty>"",
+            ""publisher"": ""Tuan Paderi Beighton"",
+            ""printer"": ""<empty>"",
+            ""copyist"": ""<empty>"",
+            ""contents"": ""1 story of Sabat, 13 Christ's\nteachings on redemption"",
+            ""Notes"": ""the first edition printed at\nAmerican Mission Press"",
+            ""References"": ""? Bibliotheque Favre 1888, item 3S3(88)\n[referring to \""Trois traites: livre de\nlecture\npour\nI'amusement\net\nl'instruction \""]"",
+            ""Location"": ""BL OIOC 14620.d.17(S) < Maison-\nneuve «Millies @ microform Or.\nMic. SOlO;\nSOAS EB:82:445 338322(4) [in process]"",
+            ""unclassified_text"": ""4th edition\nCeritera Hikayat Abdullah dan Sabat\nSingapore\nISpp. (1-15);\ntypeset jawi, on 21 x 12.5\ncm pages, with 22 lines per page, in\nedition of 2000 copies""
+          }
+        },
+        {
+          ""edition_name"": ""1837.b"",
+          ""edition_information"": {
+            ""author"": ""<empty>"",
+            ""proprietor"": ""<empty>"",
+            ""publisher"": ""<empty>"",
+            ""printer"": ""<empty>"",
+            ""copyist"": ""<empty>"",
+            ""contents"": ""1 story of Sabat, 23\nconcluding hymn"",
+            ""Notes"": ""<empty>"",
+            ""References"": ""Bibliotheque Favre 1888, item 353(46)"",
+            ""Location"": ""BL OIOC 14620.b.13(6) < Maison-\nneuve [« Millies];\n°LC"",
+            ""unclassified_text"": ""Hikayat Abdullah dan Sabat :htl\n[Singapore :BL]\nn.d.; [1837 :BL]\n24pp. (1-24);\ntypeset jawi on 15 x 9.5\nem pages in unframed text block of 12\nx 7 em with 17 lines per page""
+          }
+        }
+      ]
+    }
+  ]
+}",FALSE

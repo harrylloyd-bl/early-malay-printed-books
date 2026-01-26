@@ -243,7 +243,7 @@ def test_extract_clean_entries(manual_check_df, title_loc_df, preprocessed_text)
     desc_lines, _ = data.gen_desc_lines(preprocessed_text)
     title_loc_df = data.apply_find_nearest(title_loc_df, desc_lines)
     title_loc_df = data.extract_clean_entries(manual_check_df=manual_check_df, title_loc_df=title_loc_df, description_lines=desc_lines)
-    breakpoint()
+    
     assert "correct_title" in title_loc_df
     assert "entry_text" in title_loc_df
 
@@ -260,5 +260,19 @@ def test_extract_clean_entries(manual_check_df, title_loc_df, preprocessed_text)
         entry_lines_set |= s
 
     assert len(set(range(0, 51207)) - entry_lines_set) == 0 
+
+    # check the first five entries have been picked up correctly
+    entry_gt = {
+        "Abbas": desc_lines[0:42],
+        "Abdau": desc_lines[42:91],
+        "Abdullah": desc_lines[91:572],
+        "Abdullah dan Sa bat": desc_lines[572:677],
+        "Abdul Muluk": desc_lines[677:1091]
+    }
+
+    breakpoint()
+    for gt_title, gt_text in entry_gt.items():
+        entry_text = title_loc_df.query(f"correct_title == '{gt_title}'").loc[:, "entry_text"].values[0].split("\n")
+        assert gt_text == entry_text
 
 # TODO rename to test_dataset once current changes are committed

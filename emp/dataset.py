@@ -292,20 +292,29 @@ def gen_short_titles(works: pd.DataFrame, converter: Callable[[str], str]) -> pd
     return works
 
 
-def lookup_aac_titles(aac_file: str, works: pd.DataFrame) -> list[tuple[str, str]]:
+def gen_aac_list(aac_file: str) -> pd.DataFrame:
     """
-    Import the list of all AAC works and compare this to the list of main works to calculate how many works are represented
+    Import the list of all AAC works
     
     :param aac_file: The filepath for the AAC list of works
     :type aac_file: str
-    :param main_works: pandas Series of all main works
-    :type main_works: pd.Series[str]
     """
     aac_list = pd.read_csv(aac_file, header=None, names=["shelfmark", "short_title", "year"], usecols=[0,1,2])
     aac_list["short_title_no_year"] = aac_list["short_title"].apply(shorten_aac_title)
+    return aac_list
+
+
+def lookup_aac_titles(aac_df: pd.DataFrame, works: pd.DataFrame) -> list[tuple[str, str]]:
+    """
+    Compare the list of AAC works to the list of main works to calculate how many works are represented
     
-    matched_works = [(w, w) for w in aac_list["short_title_no_year"].unique() if w in works]
-    missing_works = [w for w in aac_list["short_title_no_year"].unique() if w not in works]
+    :param aac_df: The AAC list of works
+    :type aac_df: pd.DataFrame
+    :param works: sorted list of Title works appearing in the AAC list
+    :type works: list[tuple[str, str]]
+    """
+    matched_works = [(w, w) for w in aac_df["short_title_no_year"].unique() if w in works]
+    missing_works = [w for w in aac_df["short_title_no_year"].unique() if w not in works]
 
     missing_work_matches = []
     for w in missing_works:
@@ -474,5 +483,3 @@ def extract_clean_entries(manual_check_df: pd.DataFrame, title_loc_df: pd.DataFr
     title_loc_df["entry_text"] = title_loc_df.apply(lambda x: "\n".join(description_lines[x["entry_start"]: x["entry_end"] + 1]), axis=1)
 
     return title_loc_df
-
-

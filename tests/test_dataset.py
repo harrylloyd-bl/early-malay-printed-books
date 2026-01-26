@@ -192,9 +192,16 @@ def test_gen_short_titles(works):
     assert works["short_title_titles"].is_unique
 
 
+def test_gen_aac_list():
+    aac_file = "data/external/Proudfoot-BL collection-6.10.25.csv"
+    aac_df = data.gen_aac_list(aac_file=aac_file)
+    assert aac_df.shape == (686, 4)
+
+
 def test_lookup_aac_titles(works):
     aac_file = "data/external/Proudfoot-BL collection-6.10.25.csv"
-    matched_works = data.lookup_aac_titles(aac_file=aac_file, works=works)
+    aac_df = data.gen_aac_list(aac_file=aac_file)
+    matched_works = data.lookup_aac_titles(aac_df=aac_df, works=works)
     assert len(matched_works[0]) == 2
     assert matched_works[0][0] == "? Bible: Mark"
     assert matched_works[-1][0] == "Šilam Bari"
@@ -270,7 +277,6 @@ def test_extract_clean_entries(manual_check_df, title_loc_df, preprocessed_text)
         "Abdul Muluk": desc_lines[677:1091]
     }
 
-    breakpoint()
     for gt_title, gt_text in entry_gt.items():
         entry_text = title_loc_df.query(f"correct_title == '{gt_title}'").loc[:, "entry_text"].values[0].split("\n")
         assert gt_text == entry_text

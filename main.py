@@ -1,3 +1,7 @@
+import glob
+import json
+import os
+
 import pandas as pd
 
 import emp.dataset as data
@@ -17,6 +21,12 @@ def main():
     manual_check_df = pd.read_csv("data/interim/missing_title_adjacent_manual_check.csv", encoding="UTF8", index_col=0)
     title_loc_df = data.extract_clean_entries(manual_check_df, title_loc_df, desc_lines)
 
+    header_template = pd.read_csv("data/external/Books_template.csv", nrows=2, encoding="utf8")
+    jsons = glob.glob("data/processed/model_outputs/gt_outputs/*.json")
+    json_dict = {os.path.basename(j).split(".")[0].replace("_", " ").title(): json.load(open(j)) for j in jsons}
+    metadata_df = data.process_output_to_csv(json_dict)
+    marc_df = data.post_process_csv(metadata_df=metadata_df, header_template=header_template)
+    marc_df.to_csv("data/processed/model_outputs/gt_outputs/gt_output_batch_postproc.csv", encoding="utf-8-sig")
     return title_loc_df
 
 if __name__ == "__main__":

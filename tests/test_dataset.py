@@ -1,3 +1,6 @@
+import glob
+import json
+import os
 import emp.dataset as data
 import pandas as pd
 import pytest
@@ -249,7 +252,7 @@ def test_create_manual_check_df(title_loc_df, preprocessed_text):
 def test_extract_clean_entries(manual_check_df, title_loc_df, preprocessed_text):
     desc_lines, _ = data.gen_desc_lines(preprocessed_text)
     title_loc_df = data.apply_find_nearest(title_loc_df, desc_lines)
-    title_loc_df = data.extract_clean_entries(manual_check_df=manual_check_df, title_loc_df=title_loc_df, description_lines=desc_lines)
+    title_loc_df = data.extract_clean_entries(manual_check_df=manual_check_df, title_loc_df=title_loc_df, desc_lines=desc_lines)
     
     assert "correct_title" in title_loc_df
     assert "entry_text" in title_loc_df
@@ -281,4 +284,40 @@ def test_extract_clean_entries(manual_check_df, title_loc_df, preprocessed_text)
         entry_text = title_loc_df.query(f"correct_title == '{gt_title}'").loc[:, "entry_text"].values[0].split("\n")
         assert gt_text == entry_text
 
-# TODO rename to test_dataset once current changes are committed
+
+def test_extract_bl_shelfmark():
+    test_sm = "BL 00000.a.11"
+    res = data.extract_bl_shelfmark(test_sm)
+    target = "00000.a.11"
+    assert res == target
+
+    test_sm = "BL 00000.a.11; Barbican 4001"
+    res = data.extract_bl_shelfmark(test_sm)
+    target = "00000.a.11"
+    assert res == target
+
+    test_sm = "BL 0000l.1.l1; Barbican 4001"
+    res = data.extract_bl_shelfmark(test_sm)
+    target = "00001.l.11"
+    assert res == target
+
+
+def test_process_output_to_csv():
+    jsons = glob.glob("data/processed/model_outputs/gt_outputs/*.json")
+    json_dict = {os.path.basename(j).split(".")[0].replace("_", " ").title(): json.load(open(j)) for j in jsons}
+    metadata_df = data.process_output_to_csv(json_dict)
+    assert metadata_df.shape == (50, 13)
+    assert metadata_df.columns.to_list() == ['shelfmark', 'date_1', 'name', 'title', 'place_of_publication',
+       'publisher', 'date_of_publication_in_arabic_or_roman_numerals',
+       'extent', 'dimensions', 'general_notes', 'bibliography_etc_note',
+       'method_of_acquisition', 'unclassified_text']
+
+
+def test_post_process_csv():
+    header_template = pd.read_csv("data/external/Books_template.csv", nrows=2, encoding="utf8")
+    jsons = glob.glob("data/processed/model_outputs/gt_outputs/*.json")
+    json_dict = {os.path.basename(j).split(".")[0].replace("_", " ").title(): json.load(open(j)) for j in jsons}
+    metadata_df = data.process_output_to_csv(json_dict)
+    marc_df = data.post_process_csv(metadata_df=metadata_df, header_template=header_template)
+    breakpoint() 
+    assert marc_df.shape == (52, 94)

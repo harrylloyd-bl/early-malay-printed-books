@@ -1,7 +1,6 @@
 from collections.abc import Callable
 from copy import copy
-import json
-from random import sample
+from math import ceil
 import re
 import warnings
 
@@ -429,7 +428,7 @@ def gen_manual_check_df(title_loc_df: pd.DataFrame, line_page_lookup: dict[int, 
     return blank_manual_check_df
 
 
-def extract_clean_entries(manual_check_df: pd.DataFrame, title_loc_df: pd.DataFrame, description_lines: list[str]) -> pd.DataFrame:
+def extract_clean_entries(manual_check_df: pd.DataFrame, title_loc_df: pd.DataFrame, desc_lines: list[str]) -> pd.DataFrame:
     """
     Apply the info in a manual check csv for whether short titles mappings are correct to the titles df
     Check the integrity of the manual check csv
@@ -438,8 +437,11 @@ def extract_clean_entries(manual_check_df: pd.DataFrame, title_loc_df: pd.DataFr
     Extract entry text to new column
     
     :param manual_check_df: DataFrame created from a csv used to manually check whether fuzzy.ratio mappings for short titles are correct
+    :type manual_check_df pd.DataFrame
     :param title_loc_df: The df of all titles and their locations in the Descriptions section
-    :param description_lines: List of all Descriptions section lines 
+    :type title_loc_df: pd.DataFrame
+    :param desc_lines: List of all Descriptions section lines 
+    :type desc_lines: list[str]
     :rtype: DataFrame
     """
     # check all missing titles have been manually checked
@@ -452,7 +454,7 @@ def extract_clean_entries(manual_check_df: pd.DataFrame, title_loc_df: pd.DataFr
     manually_approved_idx = manually_approved_df.index
     to_exclude_idx = manual_check_df[manual_check_df["approve"] == -1].index
 
-    title_loc_df.loc[manually_approved_idx, "nearest_line"] = manually_approved_df["nearest_line_idx"].apply(lambda x: description_lines[x])
+    title_loc_df.loc[manually_approved_idx, "nearest_line"] = manually_approved_df["nearest_line_idx"].apply(lambda x: desc_lines[x])
     title_loc_df.loc[manually_approved_idx, "nearest_line_idx"] = manually_approved_df["nearest_line_idx"]
 
     title_loc_df.loc[manually_approved_idx, "entry_start"] = title_loc_df["nearest_line_idx"]
@@ -480,6 +482,244 @@ def extract_clean_entries(manual_check_df: pd.DataFrame, title_loc_df: pd.DataFr
 
     title_loc_df.loc[946, "entry_end"] = 51208  # Manually correct end of final entry
 
-    title_loc_df["entry_text"] = title_loc_df.apply(lambda x: "\n".join(description_lines[x["entry_start"]: x["entry_end"] + 1]), axis=1)
+    title_loc_df["entry_text"] = title_loc_df.apply(lambda x: "\n".join(desc_lines[x["entry_start"]: x["entry_end"] + 1]), axis=1)
 
     return title_loc_df
+
+
+def gen_prompt(entry_text, book_title, json_schema):
+    # TODO refactor to include target edition in the output
+    pass
+
+
+def query_api(prompt, token):
+    # probably done with a client
+    # check the calls from the FF workshop
+    # maybe async def
+    pass
+
+
+def log_api_call(prompt, output):
+    pass
+
+
+def extract_bl_shelfmark(locations_str: str) -> str:
+    """
+    Extract a BL shelfmark from a string containing the location of a work
+    Return empty string if no BL shelfmarks present
+    
+    :param locations_str: Qwen extracted text containing holdings locations of a work
+    :type locations_str: str
+    """
+    # These 4 patterns match all 686 
+    three_part_re = re.compile(r"([o° 0-9lI]+[\.,])([a-z13]+[\.,])([ 0-9lI()]+)")
+    jav_re = re.compile(r"Jav\.[\d()]+")
+    orb_re = re.compile(r"ORB\. ?[0-9]+/[0-9]+")
+    siam_re = re.compile(r"Siam \d+")
+
+    locations = locations_str.split(";")
+    bl_loc = [loc for loc in locations if "BL" in loc]
+    if not bl_loc:
+        return ""
+
+    grp = three_part_re.search(bl_loc[0])
+    if grp:
+        p1, p2, p3 = grp.groups()
+        if "l" in p1:
+            p1 = p1.replace("l", "1")
+        if "I" in p1:
+            p1 = p1.replace("I", "1")
+        
+        if "1" in p2:
+            p2 = p2.replace("1", "l")
+        
+        if "l" in p3:
+            p3 = p3.replace("l", "1")
+        if "I" in p3:
+            p3 = p3.replace("I", "1")
+
+        return p1.strip() + p2 + p3.strip()
+
+    grp = jav_re.search(bl_loc[0])
+    if grp:
+        sm = grp.group()
+        return sm
+    
+    grp = orb_re.search(bl_loc[0])
+    if grp:
+        sm = grp.group()
+        return sm
+    
+    grp = siam_re.search(bl_loc[0])
+    if grp:
+        sm = grp.group()
+        return sm
+
+    return ""
+        
+
+def process_output_to_csv(json_dict: dict[str, dict[str, list[dict[str, str]]]]) -> pd.DataFrame:
+    """
+    Process Qwen JSON outputs to csv
+    
+    :param json_list: Description
+    :type json_list: list[dict[str, str]]
+    """
+    metadata_lines = []
+    for short_title, json in json_dict.items():
+        for e in json["editions"]:
+            e["edition_name"] = e["edition_name"].replace("t", "†")
+            shelfmark = extract_bl_shelfmark(e["Location"])
+
+            try:
+                date = int(e["edition_name"].split(".")[0])
+                date_1 = str(date)
+                date_of_publication_in_arabic_or_roman_numerals = str(date)
+                if date <= 1886:
+                    method_of_acquisition = "purchased"
+                elif date >= 1887:
+                    method_of_acquisition = "legal deposit"
+            except ValueError:
+                date_1 = ""
+                date_of_publication_in_arabic_or_roman_numerals = ""
+                method_of_acquisition = ""
+
+            edition = e["edition_name"]
+            name = e["author"]
+            extracted_title = e["title"]
+            place_of_publication = e["place_of_publication"]
+            publisher = e["publisher"]
+            extent = e["extent"]
+            dimensions = e["dimensions"]
+            general_notes = e["printing_medium"]
+            bibliography_etc_note = f"Proudfoot 1993: {short_title} {e["edition_name"]}"
+            unclassified_text = e["unclassified_text"]
+
+            metadata = pd.DataFrame(
+                data={
+                    "short_title": short_title,
+                    "edition": edition,
+                    "shelfmark": shelfmark,
+                    "date_1": date_1,
+                    "name": name,
+                    "title": extracted_title,
+                    "place_of_publication": place_of_publication,
+                    "publisher": publisher,
+                    "date_of_publication_in_arabic_or_roman_numerals": date_of_publication_in_arabic_or_roman_numerals,
+                    "extent": extent,
+                    "dimensions": dimensions,
+                    "general_notes": general_notes,
+                    "bibliography_etc_note": bibliography_etc_note,
+                    "method_of_acquisition": method_of_acquisition,
+                    "unclassified_text": unclassified_text
+                },
+                index = [0]
+            )
+
+            metadata_lines.append(metadata)
+    
+    return pd.concat(metadata_lines).set_index(["short_title", "edition"], drop=True)
+
+
+def map_orb_sm(series: pd.Series) -> pd.Series:
+
+    map = {
+        'ORB. 30/445 ': 'ORB. 30/445 (IOLR Malay F6 306/36.GF.7',
+        'ORB. 30/446 ': 'ORB. 30/446 (IOLR Malay F6 306/36.G.8)',
+        'ORB. 30/447 ': 'ORB. 30/447 (IOLR Malay F6 306/36.G.15)',
+        'ORB. 30/448 ': 'ORB. 30/448 (IOLR Malay F6 306/36.G.16)',
+        'ORB. 30/451 ': 'ORB. 30/451 (IOLR Malay B 306/36.F.29)',
+        'ORB. 30/452 ': 'ORB. 30/452 (IOLR Malay B 306/36.F.40)',
+        'ORB. 30/453 ': 'ORB. 30/453 (IOLR Malay 306/36.H.9)',
+        'ORB. 30/457 ': 'ORB. 30/457 (IOLR Malay B 306/36.F. 16)',
+        'ORB. 30/585': 'ORB. 30/585',
+        'ORB. 30/611': 'ORB. 30/611',
+        'ORB. 30/612': 'ORB. 30/612',
+        'ORB.30/5553': 'ORB.30/5553',
+        'ORB. 50/13': 'ORB. 50/13'
+    }
+    
+    mapped_series = series.replace(map)
+
+    return mapped_series
+
+def post_process_extent(s: str) -> str:
+    if "pp" in s[:10]:
+        return s.split("pp")[0].replace("l", "1").replace("I", "1") + " pages"
+    else:
+        return s
+
+
+def post_process_dimensions(s: str) -> str:
+    height_str = s.split("x")[0]
+    try:
+        height = ceil(float(height_str))
+        return str(height) + " cm"
+    except ValueError:
+        return height_str
+
+
+def post_process_notes(s: str) -> str|int:
+    if "lithographed" in s:
+        return s
+    else:
+        return ""
+    
+
+def post_process_csv(metadata_df: pd.DataFrame, header_template: pd.DataFrame) -> pd.DataFrame:
+    """
+    Apply BL cataloguing standards in post-processing steps to metadata df
+    
+    :param metadata_df: Minimally modified Qwen output mapped onto target metadata fields
+    :type metadata_df: pd.DataFrame
+    :return: A dataframe aligned as closely as possible with BL/RDA cataloguing standards
+    :rtype: DataFrame
+    """
+    header_template.set_index(pd.MultiIndex.from_arrays([(0,0), (0,1)], names=["short_title", "edition"]), inplace=True)
+
+    marc_df = metadata_df.copy()
+    marc_df.replace("<empty>", "", inplace=True)
+    marc_df["shelfmark"] = map_orb_sm(marc_df["shelfmark"])
+    marc_df["type_of_publication_date"] = "s"
+    marc_df["country_of_publication"] = "si"
+    marc_df["index"] = 0
+    marc_df["main_language"] = "may"
+    # TODO add Jawi check to Qwen prompt
+    marc_df["type_of_name"] = "Personal name - surname first"
+    marc_df["name"] = marc_df["name"].str.strip("[]").str.split(" :").apply(lambda x: x[0])
+    marc_df["relationship_to_resource"] = "author"
+    marc_df["title"] = marc_df["title"].str.replace('"', '')
+    marc_df["title_ind2"] = 0
+    marc_df["extent"] = marc_df["extent"].apply(lambda x: post_process_extent(x))
+    marc_df["dimensions"] = marc_df["dimensions"].apply(lambda x: post_process_dimensions(x))
+    marc_df["main_content"] = "text"
+    marc_df["carrier_type"] = "volume"
+    marc_df["general_notes"] = marc_df["general_notes"].apply(lambda x: post_process_notes(x))
+    
+    marc_df.rename(columns={
+        'shelfmark': 'Shelfmark',
+        'date_1': 'Date 1',
+        'name': 'Name',
+        'title': 'Title',
+        'place_of_publication': 'Place of publication',
+        'publisher': 'Publisher',
+        'date_of_publication_in_arabic_or_roman_numerals': 'Date of publication in Arabic or Roman numerals',
+        'extent': 'Extent',
+        'dimensions': 'Dimensions',
+        'general_notes': 'General notes',
+        'bibliography_etc_note': 'Bibliography etc. note',
+        'method_of_acquisition': 'Method of acquisition',
+        'unclassified_text': 'unclassified_text',
+        'type_of_publication_date': 'Type of publication date',
+        'country_of_publication': 'Country of publication',
+        'index': 'Index',
+        'main_language': 'Main language',
+        'type_of_name': 'Type of name',
+        'relationship_to_resource': 'Relationship to resource',
+        'title_ind2': ' ',
+        'date_of_publication': 'Date of publication',
+        'main_content': 'Main content type',
+        'carrier_type': 'Carrier type'
+    }, inplace=True)
+    
+    return pd.concat([header_template, marc_df])

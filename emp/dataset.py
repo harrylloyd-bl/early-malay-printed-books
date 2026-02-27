@@ -800,6 +800,7 @@ def process_output_to_csv(json_dict: dict[str, dict[str, list[dict[str, str]]]])
                     "extent": extent,
                     "dimensions": dimensions,
                     "general_notes": general_notes,
+                    # TODO convert bib note to 510 citation/ref note and modify format
                     "bibliography_etc_note": bibliography_etc_note,
                     "method_of_acquisition": method_of_acquisition,
                     "unclassified_text": unclassified_text
@@ -850,6 +851,7 @@ def post_process_dimensions(s: str) -> str:
         return height_str
 
 
+# TODO make title case
 def post_process_notes(s: str) -> str|int:
     if "lithographed" in s:
         return s

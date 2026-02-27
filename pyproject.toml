@@ -12,6 +12,7 @@ dependencies = [
     "numpy>=2.3.4",
     "pandas>=2.3.3",
     "pip>=25.3",
+    "pymarc>=5.3.1",
     "pymupdf>=1.26.5",
     "pytest>=8.4.2",
     "python-dotenv>=1.2.1",

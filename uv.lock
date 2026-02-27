@@ -316,6 +316,7 @@ dependencies = [
     { name = "numpy" },
     { name = "pandas" },
     { name = "pip" },
+    { name = "pymarc" },
     { name = "pymupdf" },
     { name = "pytest" },
     { name = "python-dotenv" },
@@ -335,6 +336,7 @@ requires-dist = [
     { name = "numpy", specifier = ">=2.3.4" },
     { name = "pandas", specifier = ">=2.3.3" },
     { name = "pip", specifier = ">=25.3" },
+    { name = "pymarc", specifier = ">=5.3.1" },
     { name = "pymupdf", specifier = ">=1.26.5" },
     { name = "pytest", specifier = ">=8.4.2" },
     { name = "python-dotenv", specifier = ">=1.2.1" },
@@ -1410,6 +1412,15 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/b0/77/a5b8c569bf593b0140bde72ea885a803b82086995367bf2037de0159d924/pygments-2.19.2.tar.gz", hash = "sha256:636cb2477cec7f8952536970bc533bc43743542f70392ae026374600add5b887", size = 4968631, upload-time = "2025-06-21T13:39:12.283Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/c7/21/705964c7812476f378728bdf590ca4b771ec72385c533964653c68e86bdc/pygments-2.19.2-py3-none-any.whl", hash = "sha256:86540386c03d588bb81d44bc3928634ff26449851e99741617ecb9037ee5ec0b", size = 1225217, upload-time = "2025-06-21T13:39:07.939Z" },
+]
+
+[[package]]
+name = "pymarc"
+version = "5.3.1"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/e2/28/8cd999db1c4c6d7e855e7596bc17294829e95e818473afbb655cfa167dd0/pymarc-5.3.1.tar.gz", hash = "sha256:d289233d7298aeae45d976081710391cf21e754f73928132508b8adfe8ea0b49", size = 235395, upload-time = "2025-06-18T13:57:51.3Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/ca/ba/058498db9945b4f0b1bbf9d2e3095d3c4c21934946953056b1a0751cc5a1/pymarc-5.3.1-py3-none-any.whl", hash = "sha256:3fcc09f9d51ef27c40f8d215e3219d0f3eb29716a0767e689c4923e38182ad73", size = 160259, upload-time = "2025-06-18T13:57:46.869Z" },
 ]
 
 [[package]]

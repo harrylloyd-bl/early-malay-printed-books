@@ -487,9 +487,198 @@ def extract_clean_entries(manual_check_df: pd.DataFrame, title_loc_df: pd.DataFr
     return title_loc_df
 
 
-def gen_prompt(entry_text, book_title, json_schema):
+def gen_prompt(entry_text: str, book_title: str) -> str:
+    """
+    Apply the info in a manual check csv for whether short titles mappings are correct to the titles df
+    Check the integrity of the manual check csv
+    Apply the manually checked lines to the titles df
+    Apply a series of manual corrections for entry start/end points
+    Extract entry text to new column
+    
+    :param entry_text: new line escaped text of an entry from the Descriptions section
+    :type entry_text str
+    :param book_title: The title of the work
+    :type book_title: str
+    :rtype: str
+    """
+    json_schema = {
+        "$schema": "http://json-schema.org/draft-04/schema#",
+        "type": "object",
+        "properties": {
+            "editions": {
+            "type": "array",
+            "items": [
+                {
+                "type": "object",
+                "properties": {
+                    "edition_name": {
+                    "type": "string"
+                    },
+                    "title": {
+                    "type": "string"
+                    },
+                    "author": {
+                    "type": "string"
+                    },
+                    "editor": {
+                    "type": "string"
+                    },
+                    "translator": {
+                    "type": "string"
+                    },
+                    "assistant_translator": {
+                    "type": "string"
+                    },
+                    "proprietor": {
+                    "type": "string"
+                    },
+                    "publisher": {
+                    "type": "string"
+                    },
+                    "printer": {
+                    "type": "string"
+                    },
+                    "copyist": {
+                    "type": "string"
+                    },
+                    "contents": {
+                    "type": "string"
+                    },
+                    "place_of_publication": {
+                    "type": "string"
+                    },
+                    "printing_medium": {
+                    "type": "string"
+                    },
+                    "script": {
+                    "type": "string"
+                    },
+                    "dimensions": {
+                    "type": "string"
+                    },
+                    "extent": {
+                    "type": "string"
+                    },
+                    "Notes": {
+                    "type": "string"
+                    },
+                    "References": {
+                    "type": "string"
+                    },
+                    "Location": {
+                    "type": "string"
+                    },
+                    "unclassified_text": {
+                    "type": "string"
+                    }
+                },
+                "required": [
+                    "edition_name",
+                    "title",
+                    "author",
+                    "editor",
+                    "translator",
+                    "assistant_translator",
+                    "proprietor",
+                    "publisher",
+                    "printer",
+                    "copyist",
+                    "contents",
+                    "place_of_publication",
+                    "printing_medium",
+                    "script",
+                    "dimensions",
+                    "extent",
+                    "Notes",
+                    "References",
+                    "Location",
+                    "unclassified_text"
+                ]
+                }
+            ]
+            }
+        },
+        "required": [
+            "editions"
+        ]
+    }
+
+    prompt = f"""Please extract structured metadata from the following text. The text is an entry for a particular book from a catalogue of books printed before 1925 in Malaysia.
+    The text has been extracted from a pdf using optical character recognition and may contain errors. Do not correct these errors, but attempt to understand the correct words when extracting information.
+    The text is split using line breaks. These separate lines in the OCR, but extra, unnecessary line breaks have sometimes been added between text from the same line.
+    Each book entry begins with the book title, then is split into one or more editions. Each edition starts with an edition name in one of three formats:
+    1) A year
+    2) A year followed by a full stop then a letter (if there are multiple editions for one year)
+    3) A letter (if the date of publication is unknown)
+
+    The text for each edition normally reprints the edition date within it. The text for each edition contains different fields you should extract.
+    These fields are marked by the field heading, and fields may run over multiple lines. All text before the next field heading belongs to that field. Not every entry has every field.
+    Field headings are case insensitive. The Reference and Location fields are not usually followed by a colon. The other fields are followed by a colon.
+    Sometimes fields are combined, such as 'author & proprietor', or 'publisher & printer'. In these cases repeat the information in text in the author and proprietor fields of the output.
+    Field headings are:
+    - author
+    - editor
+    - translator
+    - assistant translator
+    - proprietor
+    - publisher
+    - printer
+    - copyist
+    - contents
+    - Notes
+    - Reference(s)
+    - Location(s)
+
+    There is text between the edition name and the first field. There may also be text between fields that does not belong to that field. Both these types of text should be treated together as follows.
+    This text may contain a title, a place of publication, the date of publication, the printing medium, the script of the text, the number of pages, the number of volumes, the dimensions of the edition.
+    If the title is missing use the title provided later on in this prompt, otherwise use the title from the text. Use this text to extract the following fields:
+    - title
+    - place_of_publication
+    - printing_medium
+    - script
+    - dimensions
+    - extent (the number of volumes and number of pages) 
+    
+    The extent is number of pages, or if there are multiple volumes, then the number of volumes, sometimes called books, and the number of pages for each volume.
+    If there are multiple volumes report the extent as '<XX> volumes; <YY> pages' where <XX> is the the total number of volumes for the work and <YY> is the total number of pages summed over all the volumes.
+
+    The script of the text is the script the book itself is written in. If the word 'Jawi' is mentioned in the text return 'In Jawi script' for the script. Otherwise return <empty>.
+
+    The printing_medium is how the text was printed. If the words 'lithographed' or 'lithographed jawi' are mentioned in the text return 'lithographed', otherwise return <empty>. 
+    If the text contains 'lithographed illustrations' also return <empty>.
+
+    Please extract the following information in json format. Only use the fields listed below. Not every entry has every field. If a field is missing represent it as <empty> in the output json.
+    - edition name
+    - title
+    - author
+    - editor
+    - translator
+    - assistant translator
+    - publisher
+    - printer
+    - copyist
+    - contents
+    - place_of_publication
+    - printing_medium
+    - script
+    - dimensions
+    - extent (the number of volumes and number of pages) 
+    - notes
+    - references
+    - locations
+    Any text not in these fields include in the output json as a seperate field called 'unclassified_text'
+        
+    Please format the output as valid json using the schema below. Make sure to provide a valid and well-formatted JSON adhering to the given schema. Do not make up any information, only use what is provided in the text.
+    {json_schema}    
+
+    First, split the text into editions using the edition names, then assign the text for each edition to the appropriate fields.
+    The title of this book is: {book_title}
+    
+    Book entry text:
+    {entry_text}
+    """
     # TODO refactor to include target edition in the output
-    pass
+    return prompt
 
 
 def query_api(prompt, token):
@@ -513,7 +702,7 @@ def extract_bl_shelfmark(locations_str: str) -> str:
     """
     # These 4 patterns match all 686 
     three_part_re = re.compile(r"([o° 0-9lI]+[\.,])([a-z13]+[\.,])([ 0-9lI()]+)")
-    jav_re = re.compile(r"Jav\.[\d()]+")
+    jav_re = re.compile(r"Jav\. ?[\d()]+")
     orb_re = re.compile(r"ORB\. ?[0-9]+/[0-9]+")
     siam_re = re.compile(r"Siam \d+")
 
@@ -587,6 +776,8 @@ def process_output_to_csv(json_dict: dict[str, dict[str, list[dict[str, str]]]])
             edition = e["edition_name"]
             name = e["author"]
             extracted_title = e["title"]
+            if extracted_title == "<empty>":
+                extracted_title = short_title.replace("_", " ").title()
             place_of_publication = e["place_of_publication"]
             publisher = e["publisher"]
             extent = e["extent"]

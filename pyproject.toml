@@ -5,11 +5,13 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.14"
 dependencies = [
+    "aiohttp>=3.13.3",
     "ipykernel>=7.1.0",
     "jupyterlab>=4.4.10",
     "langdetect>=1.0.9",
     "matplotlib>=3.10.7",
     "numpy>=2.3.4",
+    "openai>=2.24.0",
     "pandas>=2.3.3",
     "pip>=25.3",
     "pymarc>=5.3.1",

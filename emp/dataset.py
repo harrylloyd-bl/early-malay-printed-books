@@ -1,12 +1,22 @@
+import asyncio
 from collections.abc import Callable
 from copy import copy
+import json
+import logging
 from math import ceil
+import os
 import re
 import warnings
 
+import aiohttp
+from dotenv import load_dotenv
+from openai import AsyncOpenAI
 import pandas as pd
 import pymupdf
 from rapidfuzz import fuzz, utils, process
+from tqdm.asyncio import tqdm
+
+load_dotenv()
 
 
 def parse_proudfoot(f: str) -> dict[str, dict[int, str]]:
@@ -681,11 +691,64 @@ def gen_prompt(entry_text: str, book_title: str) -> str:
     return prompt
 
 
-def query_api(prompt, token):
-    # probably done with a client
-    # check the calls from the FF workshop
-    # maybe async def
-    pass
+async def structure_entry_text(client: AsyncOpenAI, entry_text: str, book_title:str, semaphore: asyncio.Semaphore, model: str, logger: logging.Logger):
+    async with semaphore:
+        prompt = gen_prompt(entry_text, book_title)
+        logger.info(f"Prompt token count: {len(prompt.split(" "))}")
+        messages = [{"role": "user", "content": prompt}]
+        try: 
+            completion = await asyncio.wait_for(
+                client.chat.completions.create( # type: ignore
+                    model=model,
+                    messages=messages, # type: ignore
+                    stream=False,
+                    extra_body={"enable_thinking": False}
+                ), 
+                timeout=360
+            )
+            output = completion
+            return (book_title, output)
+        except asyncio.TimeoutError:
+            print(f"API timeout for entry {book_title}")
+            return None
+        except Exception as e:
+            print(f"Error processing entry {book_title}: {e}")
+            return None
+
+
+async def structure_all_entries(entries: dict[str, str], max_concurrent=3, model:str="qwen3-235b-a22b-thinking-2507", logger: logging.Logger=logging.getLogger(__name__)):
+    """Process all images concurrently with a limit on concurrent requests"""
+    # Create aiohttp session for connection pooling
+    connector = aiohttp.TCPConnector(limit=10, limit_per_host=5)
+    timeout = aiohttp.ClientTimeout(total=600)  # 10 minute total timeout
+
+    client = AsyncOpenAI(
+        api_key=os.environ["DASHSCOPE_API_KEY"],
+        base_url="https://dashscope-intl.aliyuncs.com/compatible-mode/v1",
+    )
+
+    async with aiohttp.ClientSession(connector=connector, timeout=timeout) as session:
+        semaphore = asyncio.Semaphore(max_concurrent)
+
+        # Create tasks for all images
+        tasks = [structure_entry_text(client, entry_text, book_title, semaphore, model, logger) for book_title, entry_text in entries.items()]
+
+        # Process with progress bar
+        results = []
+        completed_count = 0
+
+        for task in tqdm.as_completed(tasks, total=len(tasks), desc="Processing entries"):
+            try:
+                result = await task
+                completed_count += 1
+                if result is not None:
+                    results.append(result)
+                #print(f"Completed {completed_count}/{len(tasks)} images")
+            except Exception as e:
+                print(f"Task failed with error: {e}")
+                completed_count += 1
+
+    return results
 
 
 def log_api_call(prompt, output):

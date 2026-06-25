@@ -19,7 +19,7 @@ def preprocessed_text(text):
 def all_works(preprocessed_text):
     text = preprocessed_text
     all_titles_raw = data.gen_title_lines(text)
-    all_titles = data.manual_merge(all_titles_raw, "data/processed/lines_to_concatenate_with_text.txt")
+    all_titles = data.manual_merge(all_titles_raw, "data/interim/lines_to_concatenate_with_text.txt")
     works = data.select_works(all_titles)
     return works
 
@@ -35,7 +35,7 @@ def title_loc_df(works, preprocessed_text):
 
 @pytest.fixture
 def manual_check_df():
-    manual_check_df = pd.read_csv("data/interim/missing_title_adjacent_manual_check.csv", encoding="UTF8", index_col=0)
+    manual_check_df = pd.read_csv("data/interim/missing_title_adjacent_manual_check.csv", encoding="UTF-8-SIG", index_col=1)
     return manual_check_df
 
 def test_parse_proudfoot(text):
@@ -157,12 +157,12 @@ def test_gen_desc_lines(preprocessed_text):
 def test_manual_merge(preprocessed_text):
     text = preprocessed_text
     all_titles = data.gen_title_lines(text)
-    all_titles_corrected = data.manual_merge(all_titles, "data/processed/lines_to_concatenate_with_text.txt")
+    all_titles_corrected = data.manual_merge(all_titles, "data/interim/lines_to_concatenate_with_text.txt")
     assert len(all_titles_corrected) == 4174
 
 
 def test_select_works(all_works):
-    assert len(all_works) == 959
+    assert len(all_works) == 956
     
     with open("data/processed/ground_truth/28_main_titles.txt", encoding="utf8") as f:
         gt_main_works = [l.strip("\n") for l in f.readlines()]
@@ -201,6 +201,7 @@ def test_gen_aac_list():
     assert aac_df.shape == (686, 4)
 
 
+@pytest.mark.for_review
 def test_lookup_aac_titles(works):
     aac_file = "data/external/Proudfoot-BL collection-6.10.25.csv"
     aac_df = data.gen_aac_df(aac_file=aac_file)
@@ -230,8 +231,9 @@ def test_find_nearest_line(title_loc_df, preprocessed_text):
 
 
 def test_gen_title_loc_df(title_loc_df):
-    assert title_loc_df.columns.tolist() == ["short_title_titles", "short_title_desc", "entry_start", "min_line", "max_line"]
-    assert len(title_loc_df) == 947
+    col_list = ['short_title_desc', 'entry_start', 'min_line', 'max_line']
+    assert title_loc_df.columns.tolist() == col_list
+    assert len(title_loc_df) == 949
 
 
 def test_apply_find_nearest(title_loc_df, preprocessed_text):
@@ -242,11 +244,11 @@ def test_apply_find_nearest(title_loc_df, preprocessed_text):
     assert not title_loc_df.query("similarity >= 90")["short_title_desc"].dropna().hasnans
 
 
-def test_create_manual_check_df(title_loc_df, preprocessed_text):
+def test_gen_manual_check_df(title_loc_df, preprocessed_text):
     _, line_page_lookup = data.gen_desc_lines(preprocessed_text)
     manual_check_df = data.gen_manual_check_df(title_loc_df=title_loc_df, line_page_lookup=line_page_lookup)
     assert "min_line_page" in manual_check_df
-    assert len(manual_check_df) == 858
+    assert len(manual_check_df) == 848
 
 
 def test_extract_clean_entries(manual_check_df, title_loc_df, preprocessed_text):
@@ -303,21 +305,20 @@ def test_extract_bl_shelfmark():
 
 
 def test_process_output_to_csv():
-    jsons = glob.glob("data/processed/model_outputs/gt_outputs/*.json")
+    jsons = glob.glob("data/processed/batch_251219_ground_truth/*.json")
     json_dict = {os.path.basename(j).split(".")[0].replace("_", " ").title(): json.load(open(j)) for j in jsons}
     metadata_df = data.process_output_to_csv(json_dict)
     assert metadata_df.shape == (50, 13)
     assert metadata_df.columns.to_list() == ['shelfmark', 'date_1', 'name', 'title', 'place_of_publication',
        'publisher', 'date_of_publication_in_arabic_or_roman_numerals',
-       'extent', 'dimensions', 'general_notes', 'bibliography_etc_note',
+       'extent', 'dimensions', 'general_notes', 'citation_ref_note',
        'method_of_acquisition', 'unclassified_text']
 
 
 def test_post_process_csv():
     header_template = pd.read_csv("data/external/Books_template.csv", nrows=2, encoding="utf8")
-    jsons = glob.glob("data/processed/model_outputs/gt_outputs/*.json")
+    jsons = glob.glob("data/processed/batch_251219_ground_truth/*.json")
     json_dict = {os.path.basename(j).split(".")[0].replace("_", " ").title(): json.load(open(j)) for j in jsons}
     metadata_df = data.process_output_to_csv(json_dict)
     marc_df = data.post_process_csv(metadata_df=metadata_df, header_template=header_template)
-    breakpoint() 
     assert marc_df.shape == (52, 94)

@@ -338,6 +338,8 @@ def gen_short_titles(works_df: pd.DataFrame, converter: Callable[[str], str]) ->
     return works_df
 
 
+# TODO review this, may be superseded by corrections in notebooks
+# or may need to be updated once all corrections to Boll and full AAC have been done
 def gen_aac_df(aac_file: str) -> pd.DataFrame:
     """
     Import the list of all AAC works
@@ -468,12 +470,21 @@ def gen_manual_check_df(title_loc_df: pd.DataFrame, line_page_lookup: dict[int, 
     :rtype: DataFrame
     """
     missing_with_adjacent = []
-    for t in title_loc_df.loc[title_loc_df["entry_start"].isna()].index:
-        missing_with_adjacent += [t-1, t, t+1]
-
-    blank_manual_check_df = title_loc_df.loc[sorted(list(set(missing_with_adjacent)))[:-1]]
-    blank_manual_check_df["min_line_page"] = blank_manual_check_df["min_line"].map(line_page_lookup)
     
+    missing_start_idx = title_loc_df.loc[title_loc_df["entry_start"].isna()].index
+    for t in missing_start_idx:
+        idx_loc = title_loc_df.index.get_loc(t)
+        missing_with_adjacent += [idx_loc-1, idx_loc, idx_loc+1]
+
+    if -1 in missing_with_adjacent:
+        missing_with_adjacent.remove(-1)
+    if len(title_loc_df) in missing_with_adjacent:
+        missing_with_adjacent.remove(len(title_loc_df))
+
+    blank_manual_check_df = title_loc_df.iloc[sorted(list(set(missing_with_adjacent)))[:-1], :].copy()
+    blank_manual_check_df["min_line_page"] = blank_manual_check_df["min_line"].map(line_page_lookup)
+    blank_manual_check_df.insert(0, "approve", "")
+
     return blank_manual_check_df
 
 

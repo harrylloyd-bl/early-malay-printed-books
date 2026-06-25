@@ -197,14 +197,14 @@ def test_gen_short_titles(works):
 
 def test_gen_aac_list():
     aac_file = "data/external/Proudfoot-BL collection-6.10.25.csv"
-    aac_df = data.gen_aac_list(aac_file=aac_file)
+    aac_df = data.gen_aac_df(aac_file=aac_file)
     assert aac_df.shape == (686, 4)
 
 
 def test_lookup_aac_titles(works):
     aac_file = "data/external/Proudfoot-BL collection-6.10.25.csv"
-    aac_df = data.gen_aac_list(aac_file=aac_file)
-    matched_works = data.lookup_aac_titles(aac_df=aac_df, works=works)
+    aac_df = data.gen_aac_df(aac_file=aac_file)
+    matched_works = data.lookup_aac_titles(aac_df=aac_df, works_df=works)
     assert len(matched_works[0]) == 2
     assert matched_works[0][0] == "? Bible: Mark"
     assert matched_works[-1][0] == "Šilam Bari"

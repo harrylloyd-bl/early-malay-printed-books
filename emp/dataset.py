@@ -1,3 +1,4 @@
+from emp.config import DATA_DIR
 import asyncio
 from collections.abc import Callable
 from copy import copy
@@ -43,7 +44,7 @@ def parse_proudfoot(f: str) -> dict[str, dict[int, str]]:
             break
 
         if section:
-            page_text = page.get_text() # get plain text (is in UTF-8)
+            page_text = page.get_text() # get plain text (is in UTF-8)  # ty:ignore[unresolved-attribute]
             text[section][i] = page_text
 
     return text
@@ -161,11 +162,11 @@ def gen_title_lines(text: dict[str, dict[int, str]]) -> list[str]:
         page = text["titles"][i]
         processed_title_pages.append(preprocess_titles_page(page=page, page_num=page_num))
 
-    title_lines = []
+    all_titles = []
     for p in processed_title_pages:
-        title_lines.extend(p)
+        all_titles.extend(p)
     
-    return title_lines
+    return all_titles
 
 
 def gen_desc_lines(text: dict[str, dict[int, str]]) -> tuple[list[str], dict[int, int]]:
@@ -231,15 +232,51 @@ def select_works(all_titles: list[str]) -> pd.DataFrame:
     see_re = re.compile(r"see(?! also)")
 
     works = []
+
+    # Works added by manual_entry
+    # These work contains a naked 'see' at the end but are true works
+    # 'Catechism 1817, 1819.a, .b, .c, 1820, 1821.a, .b, 1824.a, .b, 1825.a, .b, 1827, 1828, 1830, 1831, 1832, 1834, 1835.a, .b, 1836, 1837, 1839, 1887, 1895.a, .b, 1905, 1916t - see also Pengajaran Masihi a 1840s, 1894.a, 1894.b, 1913; Pengutib Segala Remah 1852; Tanya-Saut 1885; also: Muslim Catechism, see Suluhan Mubtadi 1918'
+    # 'I1mu Kejadian a ±1841, 1857, 1887 - see also Tabiat Jenis-Jenis Kejadian 1848; -? for later version, see Ilmu Bintang a ±1889'
+    # 'I1mu Kepandaian a ±1840, 1843, 1855, 1865, 1866, 1872 - for later version, see Jalan Kepandaian 1876, 1878, 1881, 1885, 1890, 1914'
+
+    # Transcription error in the 'also'
+    # 'Masalah Seribu 1870. 1888 - see a/so.Sepuluh Ceretera a 1860s'
+
+    # Chose this way of including erroneous entries to preserve order
+    # find_nearest_line & apply_find_nearest both require Title section title order to be preserved
+    manual_entry = ['Catechism 1817,', 'I1mu Kejadian a', 'I1mu Kepandaian', 'Masalah Seribu ', 'Jalan Kepandaia']
+
     for title in all_titles:
-        if see_re.search(title) or "look" in title:
+        if title[:15] in manual_entry:
+            works.append(title)
+            manual_entry.remove(title[:15])
+        elif see_re.search(title) or "look" in title:
             continue    
         else:
             works.append(title)
 
     # This cf is the only incorrect one not caught by the 'see' regex
     works.remove('Adab Kesopanan bagi Orang Muda-Muda Anak yang Bangsawan - cf Adab aI-Fatiy 1916')
-    return pd.DataFrame(works, columns=["title"])
+
+    # merged works
+    works.remove('Kita ... : merged with Kitab ... below')
+    works.remove('Kitab al- ... : listed below, ignoring al- Kitab Adab Kesopanan bagi Orang Muda-Muda Anak yang Bangsawan - cl Adab al-Fatiy 1916')
+
+    # This work is 'see also' but not bolded and doesn't appear in the Descriptions
+    works.remove('Tablil - see also Puji-Pujian 1840.a, c 1850s. 1855, 1896')
+
+    # Correct title extracted in wrong place
+    # There are other duplicates removed by the is_unique check in gen_short_titles
+    works.remove('Nasihat Bapa 1890')
+    works.remove('Nur Muhammad a 1907, 1871, 1889, 1899, 1901, 1918; Sinar Gemala 1894; Siraj al- Alam 1921; Tashil al-Ghabi 1906')
+    works.remove('Hitung Cabut a ±1887, 1890, 1893, 1903t; Ilmu Hisab 1825; Ilmu Kira-Kira 1874, a 1880s, 1898; Ilmu Kira-Kira: Howell 1892; Jawab Ilmu Kira-Kira 1893; Sifrr 1886')
+    works.remove('Surat Tuan Church 1838')
+
+    # Bible is in alphabetical order in Titles and reading order in Description
+    bible_order = (89, 101, 93, 92, 103, 102, 100, 94, 99, 98, 97, 96, 90, 91, 104)
+    works[89:105] = [works[x] for x in bible_order]
+    
+    return pd.DataFrame(works, columns=["title"])  # ty:ignore[invalid-argument-type]
 
 
 def shorten_proudfoot_title(title: str) -> str:
@@ -281,7 +318,7 @@ def shorten_aac_title(title: str) -> str:
     return clean_short_title
 
 
-def gen_short_titles(works: pd.DataFrame, converter: Callable[[str], str]) -> pd.DataFrame:
+def gen_short_titles(works_df: pd.DataFrame, converter: Callable[[str], str]) -> pd.DataFrame:
     """
     Convert a list of main works into their short titles equivalents
     
@@ -290,30 +327,30 @@ def gen_short_titles(works: pd.DataFrame, converter: Callable[[str], str]) -> pd
     :return: Short title equivalents for those works
     :rtype: Series[str]
     """
-    if "title" not in works.columns:
+    if "title" not in works_df.columns:
         raise ValueError("`title` column missing")
-    works["short_title_titles"] = works["title"].apply(converter)
+    works_df["short_title_titles"] = works_df["title"].apply(converter)
 
     # Some work are duplicated due to line breaks converting "see <name of work>" to "see\n<name of work>", in which case the work gets picked up again
-    if not works["short_title_titles"].is_unique:
-        works = works.drop_duplicates(subset="short_title_titles").reset_index(drop=True)
-    
-    return works
+    if not works_df["short_title_titles"].is_unique:
+        works_df = works_df.drop_duplicates(subset="short_title_titles").reset_index(drop=True)
+        
+    return works_df
 
 
-def gen_aac_list(aac_file: str) -> pd.DataFrame:
+def gen_aac_df(aac_file: str) -> pd.DataFrame:
     """
     Import the list of all AAC works
     
     :param aac_file: The filepath for the AAC list of works
     :type aac_file: str
     """
-    aac_list = pd.read_csv(aac_file, header=None, names=["shelfmark", "short_title", "year"], usecols=[0,1,2])
-    aac_list["short_title_no_year"] = aac_list["short_title"].apply(shorten_aac_title)
-    return aac_list
+    aac_df = pd.read_csv(aac_file, header=None, names=["shelfmark", "short_title", "year"], usecols=[0,1,2])  # ty:ignore[no-matching-overload]
+    aac_df["short_title_no_year"] = aac_df["short_title"].apply(shorten_aac_title)
+    return aac_df
 
 
-def lookup_aac_titles(aac_df: pd.DataFrame, works: pd.DataFrame) -> list[tuple[str, str]]:
+def lookup_aac_titles(aac_df: pd.DataFrame, works_df: pd.DataFrame) -> list[tuple[str, str]]:
     """
     Compare the list of AAC works to the list of main works to calculate how many works are represented
     
@@ -322,12 +359,12 @@ def lookup_aac_titles(aac_df: pd.DataFrame, works: pd.DataFrame) -> list[tuple[s
     :param works: sorted list of Title works appearing in the AAC list
     :type works: list[tuple[str, str]]
     """
-    matched_works = [(w, w) for w in aac_df["short_title_no_year"].unique() if w in works]
-    missing_works = [w for w in aac_df["short_title_no_year"].unique() if w not in works]
+    matched_works = [(w, w) for w in aac_df["short_title_no_year"].unique() if w in works_df]
+    missing_works = [w for w in aac_df["short_title_no_year"].unique() if w not in works_df]
 
     missing_work_matches = []
     for w in missing_works:
-        matches = process.extract(w, works["short_title_titles"], scorer=fuzz.ratio, limit=3, processor=utils.default_process)
+        matches = process.extract(w, works_df["short_title_titles"], scorer=fuzz.ratio, limit=3, processor=utils.default_process)
         missing_work_matches.append([w, matches])
 
     accepted_matches = []
@@ -339,7 +376,40 @@ def lookup_aac_titles(aac_df: pd.DataFrame, works: pd.DataFrame) -> list[tuple[s
             failed_matches.append((w, matches))
 
     matched_works += [(w[0], w[1]) for w in accepted_matches]
-    return sorted(matched_works)
+    return matched_works
+
+
+def gen_title_loc_df(works_df: pd.Series, desc_lines: list[str]) -> pd.DataFrame:
+    """
+    Create a dataframe of work titles and their matched aliases in the description section
+    Matches only if the work string is present identically for a given entry
+    
+    :param works: Description
+    :type works: pd.Series
+    :param description_lines: Description
+    :return: Description
+    :rtype: DataFrame
+    """
+    title_loc = []
+    title_line_tracker = 0  # This has to be accurate for it to work, otherwise can get too large too quickly
+
+    for w in works_df:
+        line_window = desc_lines[title_line_tracker: title_line_tracker + 2000]
+        if w in line_window:
+            line_loc = line_window.index(w) + title_line_tracker
+            title_loc.append((w, None, line_loc, title_line_tracker, title_line_tracker + 2000))
+            title_line_tracker = line_loc
+        else:
+            title_loc.append((w, None, None, title_line_tracker, title_line_tracker + 2000))
+
+    title_loc_df = pd.DataFrame(title_loc, columns=["short_title_titles", "short_title_desc", "entry_start", "min_line", "max_line"])  # ty:ignore[invalid-argument-type]
+    title_loc_df["entry_start"] = title_loc_df["entry_start"].astype("Int64")
+    
+    if not title_loc_df["entry_start"].dropna().is_monotonic_increasing:
+        warnings.warn("Catalogue entry start lines do not monotonically increase. Check title dataframe sorting.", UserWarning)
+
+    assert title_loc_df["short_title_titles"].is_unique
+    return title_loc_df.set_index("short_title_titles")
 
 
 def find_nearest_line(row: pd.Series, desc_lines: list[str]) -> tuple[str, float, str]:
@@ -356,43 +426,12 @@ def find_nearest_line(row: pd.Series, desc_lines: list[str]) -> tuple[str, float
     :rtype: tuple[str, float, str]
     """
     possible_lines = desc_lines[row["min_line"]:row["max_line"]]
+    short_title_title: str = row.name  # ty:ignore[invalid-assignment]
     if row["entry_start"] is pd.NA:
-        nearest_line = process.extract(row["short_title_titles"], possible_lines, scorer=fuzz.ratio, limit=1, processor=utils.default_process)[0]
+        nearest_line = process.extract(short_title_title, possible_lines, scorer=fuzz.ratio, limit=1, processor=utils.default_process)[0]
         return (nearest_line[0], nearest_line[1], nearest_line[2] + row["min_line"])
     else:
-        return (row["short_title_titles"], 100.0, row["entry_start"])
-
-
-def gen_title_loc_df(works: pd.Series, desc_lines: list[str]) -> pd.DataFrame:
-    """
-    Create a dataframe of work titles and their matched aliases in the description section
-    Matches only if the work string is present identically for a given entry
-    
-    :param works: Description
-    :type works: pd.Series
-    :param description_lines: Description
-    :return: Description
-    :rtype: DataFrame
-    """
-    title_loc = []
-    title_line_tracker = 0  # This has to be accurate for it to work, otherwise can get too large too quickly
-
-    for w in works:
-        line_window = desc_lines[title_line_tracker: title_line_tracker + 2000]
-        if w in line_window:
-            line_loc = line_window.index(w) + title_line_tracker
-            title_loc.append((w, None, line_loc, title_line_tracker, title_line_tracker + 2000))
-            title_line_tracker = line_loc
-        else:
-            title_loc.append((w, None, None, title_line_tracker, title_line_tracker + 2000))
-
-    title_loc_df = pd.DataFrame(title_loc, columns=["short_title_titles", "short_title_desc", "entry_start", "min_line", "max_line"])
-    title_loc_df["entry_start"] = title_loc_df["entry_start"].astype("Int64")
-    
-    if not title_loc_df["entry_start"].dropna().is_monotonic_increasing:
-        warnings.warn("Catalogue entry start lines do not monotonically increase. Check title dataframe sorting.", UserWarning)
-
-    return title_loc_df
+        return (short_title_title, 100.0, row["entry_start"])
 
 
 def apply_find_nearest(title_loc_df: pd.DataFrame, desc_lines: list[str]) -> pd.DataFrame:
@@ -411,7 +450,7 @@ def apply_find_nearest(title_loc_df: pd.DataFrame, desc_lines: list[str]) -> pd.
     title_loc_df["similarity"] = nearest_apply.apply(lambda x: x[1])
     title_loc_df["nearest_line_idx"] = nearest_apply.apply(lambda x: x[2])
 
-    title_loc_df.loc[title_loc_df["similarity"] >= 90, "short_title_desc"] = title_loc_df.loc[title_loc_df["similarity"] >= 90, "short_title_titles"]
+    title_loc_df.loc[title_loc_df["similarity"] >= 90, "short_title_desc"] = title_loc_df.loc[title_loc_df["similarity"] >= 90].index
     title_loc_df.loc[title_loc_df["similarity"] >= 90, "entry_start"] = title_loc_df.loc[title_loc_df["similarity"] >= 90, "nearest_line_idx"]
 
     return title_loc_df
@@ -473,26 +512,99 @@ def extract_clean_entries(manual_check_df: pd.DataFrame, title_loc_df: pd.DataFr
     title_loc_df.drop(index=to_exclude_idx, inplace=True)
     
     title_loc_df["entry_end"] = title_loc_df["nearest_line_idx"].shift(-1).astype("Int64") - 1
-    title_loc_df["correct_title"] = title_loc_df["short_title_titles"]
-    
-    title_loc_df.loc[title_loc_df.query("short_title_titles == 'I1mu Falak'").index, "correct_title"] = "Ilmu Falak"
+
+    title_loc_df["correct_title"] = title_loc_df.index
     
     title_loc_df["short_title_desc"] = title_loc_df["short_title_desc"].str.strip('"')
 
-    title_loc_df.loc[title_loc_df.query("short_title_desc == 'IlmuFalak'").index, "entry_start"] = 18278 - 2  # Fix an entry starting two lines late due to bad title OCR
-    title_loc_df.loc[title_loc_df.query("short_title_desc == 'Ilmu Bintang'").index, "entry_end"] = 18277 - 2
+    # TODO df.str.replace("I1mu", "Ilmu")
+    title_loc_df.loc["Akhbar", "entry_end"] = 2520 - 64
+    title_loc_df.loc["Akidat al-Munajjin", "entry_start"] = 2521 - 64  # Fix an entry starting late due to bad title OCR
+    title_loc_df.loc["Akidat al-Munajjin", "entry_end"] = 2540 + 1  # Fix an entry starting late due to bad title OCR
+    title_loc_df.loc["Alauddin", "entry_start"] = 2541 + 1
 
-    title_loc_df.loc[title_loc_df.query("short_title_desc == 'Sirat al-Mustakim'").index, "entry_start"] = 41676 - 1  # Fix an entry starting two lines late due to bad title OCR
-    title_loc_df.loc[title_loc_df.query("short_title_desc == 'Slraj aI-KalbI'").index, "entry_end"] = 41675 - 1
+    title_loc_df.loc["Bidayat al-Mubtadi", "entry_end"] = 9318  # Fix an entry starting late due to bad title OCR
+    title_loc_df.loc["Bidayat al-Salikin", "entry_start"] = 9319  # Fix an entry starting late due to bad title OCR
 
-    title_loc_df.loc[title_loc_df.query("short_title_desc == 'Akhbar'").index, "entry_end"] = 2520 - 64
-    title_loc_df.loc[title_loc_df.query("short_title_desc == 'Akidat al-Munjian'").index, "entry_start"] = 2521 - 64  # Fix an entry starting late due to bad title OCR
-    title_loc_df.loc[title_loc_df.query("short_title_desc == 'Akidat al-Munjian'").index, "entry_end"] = 2540 + 1  # Fix an entry starting late due to bad title OCR
-    title_loc_df.loc[title_loc_df.query("short_title_desc == 'Alauddln'").index, "entry_start"] = 2541 + 1
+    title_loc_df.loc["Harapan", "entry_end"] = 16667
+    title_loc_df.loc["Haris Fadhillah", "entry_start"] = 16668
 
-    title_loc_df.loc[946, "entry_end"] = 51208  # Manually correct end of final entry
+    title_loc_df.loc["Hasan Masri", "entry_end"] = 17010
+    title_loc_df.loc["Hayat al-Hayawan", "entry_start"] = 17011
+
+    title_loc_df.loc["I1mu Falak", "entry_start"] = 18278 - 2  # Fix an entry starting two lines late due to bad title OCR
+    title_loc_df.loc["I1mu Bintang", "entry_end"] = 18277 - 2
+
+    title_loc_df.loc["Jalan Kepandaian", "entry_start"] = 20027 - 3  # Fix an entry starting three lines late due to bad title OCR
+
+    title_loc_df.loc["Makna Melayu Dalail", "entry_end"] = 25392
+    title_loc_df.loc["Makrifat al-Salat", "entry_start"] = 25393
+    title_loc_df.loc["Makrifat al-Salat", "entry_end"] = 25432
+    title_loc_df.loc["Malai Zaban", "entry_start"] = 25433
+
+    title_loc_df.loc["Pelajaran Bahasa Melayu (No.l)", "entry_start"] = 30967  # Fix entry thrown by being very similar to next entry (Pelajaran ... (No.2))
+    title_loc_df.loc["Pelajaran Bahasa Melayu (No.l)", "entry_end"] = 31193
+
+    title_loc_df.loc["Sidapati", "entry_end"] = 40925
+    title_loc_df.loc["Sifat Duapuluh", "entry_start"] = 40926
+    title_loc_df.loc["Sifat Duapuluh", "entry_end"] = 41149
+
+    title_loc_df.loc["Sirat al-Mustakim", "entry_start"] = 41676 - 1  # Fix an entry starting two lines late due to bad title OCR
+    title_loc_df.loc["Siraj al-Kalbi", "entry_end"] = 41675 - 1
+
+    title_loc_df.loc["Zubaidah", "entry_end"] = 51208  # Manually correct end of final entry
 
     title_loc_df["entry_text"] = title_loc_df.apply(lambda x: "\n".join(desc_lines[x["entry_start"]: x["entry_end"] + 1]), axis=1)
+
+    title_loc_df.loc["Ibrahim dan Isaak", "entry_text"] = title_loc_df.loc["Ibrahim dan Isaak", "entry_text"].replace("14620.aI9(10)", "14620.a.19(10)")
+
+    title_loc_df.loc["Kapal Asap", "entry_text"] = title_loc_df.loc["Kapal Asap", "entry_text"].replace("14620.b.18{l0)", "14620.b.18(10)")
+    title_loc_df.loc["Mukhtasar Takbir", "entry_text"] = title_loc_df.loc["Mukhtasar Takbir", "entry_text"].replace("14623.cA", "14623.c.4")
+    title_loc_df.loc["Pungguk", "entry_text"] = title_loc_df.loc["Pungguk", "entry_text"].replace("14626.d.l1 (8)", "14626.d.11(8)")
+    title_loc_df.loc["San Guo", "entry_text"] = title_loc_df.loc["San Guo", "entry_text"].replace("14625.a9", "14625.a.9")
+    title_loc_df.loc["Sifat Duapuluh", "entry_text"] = title_loc_df.loc["Sifat Duapuluh", "entry_text"].replace("14620.g.20(-)", "14620.g.20(0)")
+    title_loc_df.loc["Sungging", "entry_text"] = title_loc_df.loc["Sungging", "entry_text"].replace("14626.eA", "14626.e.4")
+    title_loc_df.loc["Tract: Bugis", "entry_text"] = title_loc_df.loc["Tract: Bugis", "entry_text"].replace("1463303.38", "14633.a.38")
+
+    title_loc_df = title_loc_df.rename(index={
+        "Abdullah dan Sa bat": "Abdullah dan Sabat",
+        "Ahmad dan Muhammad a,": "Ahmad dan Muhammad",
+        "Air Lailah wa Lailah": "Alf Lailah wa Lailah",
+        "A~ir Hamzah": "Amir Hamzah",
+        "Bab al-Baj'": "Bab al-Bai'",
+        "Bahjat al-Mardhiyat": "Bahjat aI-Mardhiyat",
+        "Gemala . Hikmat": "Gemala Hikmat",
+        "Hafiz ai-Islam": "Hafiz al-Islam",
+        "Haij dan Umrah": "Hajj dan Umrah",
+        "Hakikat ai-Islam": "Hakikat al-Islam",
+        "I1mu Falak": "Ilmu Falak",
+        "I1mu Kejadian": "Ilmu Kejadian",
+        "I1mu Kepandaian": "Ilmu Kepandaian",
+        "I1mu Nasib": "Ilmu Nasib",
+        "Joban Maligan": "Johan Maligan",
+        "Kamus Keeil": "Kamus Kecil",
+        "Lataif al-Tabarat": "Lataif al-Taharat",
+        "Mabsyar": "Mahsyar",
+        "Majmuab al-Syariab": "Majmuah al-Syariah",
+        "Pelajaran Bahasa Melayu (No.l)": "Pelajaran Bahasa Melayu (No.1)",
+        "Nabi Labir": "Nabi Lahir",
+        "Nailab": "Nailah",
+        "Nakboda Muda": "Nakhoda Muda",
+        "": "Nasihat Bapa",
+        "": "Pelajaran Bahasa Melayu b",
+        "Pengajaran di at as Bukit": "Pengajaran di atas Bukit",
+        "Perang ZaituD": "Perang Zaitun",
+        "Puji.Pujian": "Puji-Pujian",
+        "Sabar AIi": "Sabar Ali",
+        "Sullam al·Mubtadi": "Sullam al-Mubtadi",
+        "Umm al-Burban": "Umm al-Burhan",
+        "Umm al-Madbabib": "Umm al-Madhahib",
+        "Undang-Undang Cabaya": "Undang-Undang Cahaya",
+        "Yatim Mustafa": "Yalim Mustafa",
+        "Vue Fei": "Yue Fei",
+        "": "llmu Kepandaian",
+        "Silam Bari": "Šilam Bari",
+    })
 
     return title_loc_df
 
@@ -676,7 +788,8 @@ def gen_prompt(entry_text: str, book_title: str) -> str:
     - notes
     - references
     - locations
-    Any text not in these fields include in the output json as a seperate field called 'unclassified_text'
+    - unclassified_text
+    Any text not included in other fields include in the output json in the final 'unclassified_text' field
         
     Please format the output as valid json using the schema below. Make sure to provide a valid and well-formatted JSON adhering to the given schema. Do not make up any information, only use what is provided in the text.
     {json_schema}    
@@ -691,47 +804,58 @@ def gen_prompt(entry_text: str, book_title: str) -> str:
     return prompt
 
 
-async def structure_entry_text(client: AsyncOpenAI, entry_text: str, book_title:str, semaphore: asyncio.Semaphore, model: str, logger: logging.Logger):
+async def structure_entry_text(client: AsyncOpenAI, prompt: str, book_title:str, semaphore: asyncio.Semaphore, model: str, logger: logging.Logger):
     async with semaphore:
-        prompt = gen_prompt(entry_text, book_title)
         logger.info(f"Prompt token count: {len(prompt.split(" "))}")
         messages = [{"role": "user", "content": prompt}]
-        try: 
-            completion = await asyncio.wait_for(
-                client.chat.completions.create( # type: ignore
-                    model=model,
-                    messages=messages, # type: ignore
-                    stream=False,
-                    extra_body={"enable_thinking": False}
-                ), 
-                timeout=360
-            )
-            output = completion
-            return (book_title, output)
-        except asyncio.TimeoutError:
-            print(f"API timeout for entry {book_title}")
-            return None
-        except Exception as e:
-            print(f"Error processing entry {book_title}: {e}")
+        retries = 0
+        while retries < 3:
+            try: 
+                completion = await asyncio.wait_for(
+                    client.chat.completions.create( # type: ignore
+                        model=model,
+                        messages=messages,
+                        stream=False,
+                        extra_body={"enable_thinking": False}
+                    ), 
+                    timeout=360
+                )
+                output = completion
+                break
+            except asyncio.TimeoutError:
+                print(f"<retry {retries + 1}> API timeout for entry {book_title}")
+                logging.error(f"<retry {retries + 1}> API timeout for entry {book_title}")
+                retries += 1
+            except Exception as e:
+                print(f"\n<retry {retries + 1}> Error processing entry {book_title}: {e}")
+                logging.error(f"\n<retry {retries + 1}> Error processing entry {book_title}: {e}")
+                retries += 1
+        else:
             return None
 
+        return (book_title, output)
 
-async def structure_all_entries(entries: dict[str, str], max_concurrent=3, model:str="qwen3-235b-a22b-thinking-2507", logger: logging.Logger=logging.getLogger(__name__)):
-    """Process all images concurrently with a limit on concurrent requests"""
+async def structure_all_entries(
+    base_url:str,
+    entries: dict[str, str],
+    max_concurrent=3, model:str="qwen3-235b-a22b-thinking-2507",
+    logger: logging.Logger=logging.getLogger(__name__)
+    ):
+    """Structure all entries concurrently with a limit on concurrent requests"""
     # Create aiohttp session for connection pooling
     connector = aiohttp.TCPConnector(limit=10, limit_per_host=5)
     timeout = aiohttp.ClientTimeout(total=600)  # 10 minute total timeout
 
     client = AsyncOpenAI(
         api_key=os.environ["DASHSCOPE_API_KEY"],
-        base_url="https://dashscope-intl.aliyuncs.com/compatible-mode/v1",
+        base_url=base_url,
     )
 
     async with aiohttp.ClientSession(connector=connector, timeout=timeout) as session:
         semaphore = asyncio.Semaphore(max_concurrent)
 
         # Create tasks for all images
-        tasks = [structure_entry_text(client, entry_text, book_title, semaphore, model, logger) for book_title, entry_text in entries.items()]
+        tasks = [structure_entry_text(client, prompt, book_title, semaphore, model, logger) for book_title, prompt in entries.items()]
 
         # Process with progress bar
         results = []
@@ -766,6 +890,7 @@ def extract_bl_shelfmark(locations_str: str) -> str:
     # These 4 patterns match all 686 
     three_part_re = re.compile(r"([o° 0-9lI]+[\.,])([a-z13]+[\.,])([ 0-9lI()]+)")
     jav_re = re.compile(r"Jav\. ?[\d()]+")
+    
     orb_re = re.compile(r"ORB\. ?[0-9]+/[0-9]+")
     siam_re = re.compile(r"Siam \d+")
 
@@ -789,16 +914,20 @@ def extract_bl_shelfmark(locations_str: str) -> str:
             p3 = p3.replace("l", "1")
         if "I" in p3:
             p3 = p3.replace("I", "1")
+        
+        # TODO add "O"/ "0" replacement for p3
 
         return p1.strip() + p2 + p3.strip()
 
     grp = jav_re.search(bl_loc[0])
     if grp:
+        # TODO convert Jav. XX to Jav.XX (how listed in ATG's docs)
         sm = grp.group()
         return sm
     
     grp = orb_re.search(bl_loc[0])
     if grp:
+        # TODO convert ORB. XX to ORB.XX (how listed in ATG's docs)
         sm = grp.group()
         return sm
     
@@ -810,7 +939,7 @@ def extract_bl_shelfmark(locations_str: str) -> str:
     return ""
         
 
-def process_output_to_csv(json_dict: dict[str, dict[str, list[dict[str, str]]]]) -> pd.DataFrame:
+def process_output_to_csv(json_dict: dict[str, str | dict[str, list[dict[str, str]]]]) -> pd.DataFrame:
     """
     Process Qwen JSON outputs to csv
     
@@ -819,7 +948,10 @@ def process_output_to_csv(json_dict: dict[str, dict[str, list[dict[str, str]]]])
     """
     metadata_lines = []
     for short_title, json in json_dict.items():
-        for e in json["editions"]:
+        if json == "JSON DECODE FAILURE":
+            metadata_lines.append(pd.DataFrame({"short_title": short_title, "edition": "JSON LOAD ERROR"}))
+            continue
+        for e in json["editions"]:  # ty:ignore[invalid-argument-type]
             e["edition_name"] = e["edition_name"].replace("t", "†")
             shelfmark = extract_bl_shelfmark(e["Location"])
 
@@ -846,8 +978,8 @@ def process_output_to_csv(json_dict: dict[str, dict[str, list[dict[str, str]]]])
             extent = e["extent"]
             dimensions = e["dimensions"]
             general_notes = e["printing_medium"]
-            bibliography_etc_note = f"Proudfoot 1993: {short_title} {e["edition_name"]}"
-            unclassified_text = e["unclassified_text"]
+            citation_ref_note = f"Proudfoot 1993: {short_title} {e["edition_name"]}"
+            unclassified_text = e.get("unclassified_text", "")
 
             metadata = pd.DataFrame(
                 data={
@@ -864,11 +996,11 @@ def process_output_to_csv(json_dict: dict[str, dict[str, list[dict[str, str]]]])
                     "dimensions": dimensions,
                     "general_notes": general_notes,
                     # TODO convert bib note to 510 citation/ref note and modify format
-                    "bibliography_etc_note": bibliography_etc_note,
+                    "citation_ref_note": citation_ref_note,
                     "method_of_acquisition": method_of_acquisition,
                     "unclassified_text": unclassified_text
                 },
-                index = [0]
+                index = [0]  # ty:ignore[invalid-argument-type]
             )
 
             metadata_lines.append(metadata)
@@ -963,7 +1095,7 @@ def post_process_csv(metadata_df: pd.DataFrame, header_template: pd.DataFrame) -
         'extent': 'Extent',
         'dimensions': 'Dimensions',
         'general_notes': 'General notes',
-        'bibliography_etc_note': 'Bibliography etc. note',
+        'citation_ref_note': 'Citation/references note',
         'method_of_acquisition': 'Method of acquisition',
         'unclassified_text': 'unclassified_text',
         'type_of_publication_date': 'Type of publication date',
@@ -979,3 +1111,35 @@ def post_process_csv(metadata_df: pd.DataFrame, header_template: pd.DataFrame) -
     }, inplace=True)
     
     return pd.concat([header_template, marc_df])
+
+
+def create_title_loc_df() -> pd.DataFrame:
+    """Apply all raw data processing steps to create a dataframe of titles and title entries
+
+    Returns:
+        title_loc_df: pd.DataFrame - DataFrame of all titles and locations extracted from Proudfoot
+    """
+    text = parse_proudfoot(os.path.join(DATA_DIR, "raw/emp.pdf"))
+    preproc_text = preprocess_text(text)
+    all_titles_raw = gen_title_lines(preproc_text)
+    all_titles = manual_merge(all_titles=all_titles_raw, merge_file=os.path.join(DATA_DIR, "interim/lines_to_concatenate_with_text.txt"))
+    works_df = select_works(all_titles)
+    works_df = gen_short_titles(works_df, shorten_proudfoot_title)
+    works_df.to_csv(os.path.join(DATA_DIR, "interim/works.csv"), encoding="utf-8-sig", index=False)
+
+    desc_lines, _ = gen_desc_lines(preproc_text)
+    title_loc_df = gen_title_loc_df(works_df=works_df["short_title_titles"], desc_lines=desc_lines)
+    title_loc_df = apply_find_nearest(title_loc_df, desc_lines)
+
+    manual_check_df = pd.read_csv(
+        os.path.join(DATA_DIR, "interim/missing_title_adjacent_manual_check.csv"),
+        encoding="utf-8-sig",
+        index_col=1
+    )
+    title_loc_df = extract_clean_entries(manual_check_df, title_loc_df, desc_lines)
+    return title_loc_df
+
+
+if __name__ == "__main__":
+    title_loc_df = create_title_loc_df()
+    title_loc_df.to_csv(os.path.join(DATA_DIR, "interim/title_loc.csv"), encoding="utf-8-sig")

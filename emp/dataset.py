@@ -1,4 +1,5 @@
 from emp.config import DATA_DIR
+import aiofiles
 import asyncio
 from collections.abc import Callable
 from copy import copy
@@ -530,12 +531,15 @@ def extract_clean_entries(manual_check_df: pd.DataFrame, title_loc_df: pd.DataFr
 
     # TODO df.str.replace("I1mu", "Ilmu")
     title_loc_df.loc["Akhbar", "entry_end"] = 2520 - 64
-    title_loc_df.loc["Akidat al-Munajjin", "entry_start"] = 2521 - 64  # Fix an entry starting late due to bad title OCR
-    title_loc_df.loc["Akidat al-Munajjin", "entry_end"] = 2540 + 1  # Fix an entry starting late due to bad title OCR
+    title_loc_df.loc["Akidat al-Munajjin", "entry_start"] = 2521 - 64  # Fix entry starting late due to bad title OCR
+    title_loc_df.loc["Akidat al-Munajjin", "entry_end"] = 2540 + 1  # Fix entry starting late due to bad title OCR
     title_loc_df.loc["Alauddin", "entry_start"] = 2541 + 1
 
-    title_loc_df.loc["Bidayat al-Mubtadi", "entry_end"] = 9318  # Fix an entry starting late due to bad title OCR
-    title_loc_df.loc["Bidayat al-Salikin", "entry_start"] = 9319  # Fix an entry starting late due to bad title OCR
+    title_loc_df.loc["Bidayat al-Mubtadi", "entry_end"] = 9318  # Fix entry starting late due to bad title OCR
+    title_loc_df.loc["Bidayat al-Salikin", "entry_start"] = 9319  # Fix entry starting late due to bad title OCR
+
+    title_loc_df.loc["Fakih Sunda", "entry_start"] = 14376
+    title_loc_df.loc["Fan Tang", "entry_start"] = 14377  # Fix entry starting late due to bad OCR
 
     title_loc_df.loc["Harapan", "entry_end"] = 16667
     title_loc_df.loc["Haris Fadhillah", "entry_start"] = 16668
@@ -543,16 +547,17 @@ def extract_clean_entries(manual_check_df: pd.DataFrame, title_loc_df: pd.DataFr
     title_loc_df.loc["Hasan Masri", "entry_end"] = 17010
     title_loc_df.loc["Hayat al-Hayawan", "entry_start"] = 17011
 
-    title_loc_df.loc["I1mu Falak", "entry_start"] = 18278 - 2  # Fix an entry starting two lines late due to bad title OCR
+    title_loc_df.loc["I1mu Falak", "entry_start"] = 18278 - 2  # Fix entry starting two lines late due to bad title OCR
     title_loc_df.loc["I1mu Bintang", "entry_end"] = 18277 - 2
 
-    title_loc_df.loc["Jalan Kepandaian", "entry_start"] = 20027 - 3  # Fix an entry starting three lines late due to bad title OCR
+    title_loc_df.loc["Jalan Kepandaian", "entry_start"] = 20027 - 3  # Fix entry starting three lines late due to bad title OCR
 
     title_loc_df.loc["Makna Melayu Dalail", "entry_end"] = 25392
     title_loc_df.loc["Makrifat al-Salat", "entry_start"] = 25393
     title_loc_df.loc["Makrifat al-Salat", "entry_end"] = 25432
     title_loc_df.loc["Malai Zaban", "entry_start"] = 25433
 
+    title_loc_df.loc["Pelajaran Bahasa Arab", "entry_end"] = 30966
     title_loc_df.loc["Pelajaran Bahasa Melayu (No.l)", "entry_start"] = 30967  # Fix entry thrown by being very similar to next entry (Pelajaran ... (No.2))
     title_loc_df.loc["Pelajaran Bahasa Melayu (No.l)", "entry_end"] = 31193
 
@@ -560,7 +565,7 @@ def extract_clean_entries(manual_check_df: pd.DataFrame, title_loc_df: pd.DataFr
     title_loc_df.loc["Sifat Duapuluh", "entry_start"] = 40926
     title_loc_df.loc["Sifat Duapuluh", "entry_end"] = 41149
 
-    title_loc_df.loc["Sirat al-Mustakim", "entry_start"] = 41676 - 1  # Fix an entry starting two lines late due to bad title OCR
+    title_loc_df.loc["Sirat al-Mustakim", "entry_start"] = 41676 - 1  # Fix entry starting two lines late due to bad title OCR
     title_loc_df.loc["Siraj al-Kalbi", "entry_end"] = 41675 - 1
 
     title_loc_df.loc["Zubaidah", "entry_end"] = 51208  # Manually correct end of final entry
@@ -827,7 +832,7 @@ async def structure_entry_text(client: AsyncOpenAI, prompt: str, book_title:str,
                         model=model,
                         messages=messages,
                         stream=False,
-                        extra_body={"enable_thinking": False}
+                        extra_body={"enable_thinking": "false"}
                     ), 
                     timeout=360
                 )
@@ -850,7 +855,8 @@ async def structure_all_entries(
     base_url:str,
     entries: dict[str, str],
     max_concurrent=3, model:str="qwen3-235b-a22b-thinking-2507",
-    logger: logging.Logger=logging.getLogger(__name__)
+    logger: logging.Logger=logging.getLogger(__name__),
+    batch="default_batch"
     ):
     """Structure all entries concurrently with a limit on concurrent requests"""
     # Create aiohttp session for connection pooling
@@ -878,7 +884,9 @@ async def structure_all_entries(
                 completed_count += 1
                 if result is not None:
                     results.append(result)
-                #print(f"Completed {completed_count}/{len(tasks)} images")
+                    async with aiofiles.open(f"data/processed/batch_{batch}/{result[0].lower().replace(" ", "_").replace(":", "_")}.txt", "w") as f:
+                        logging.info(f"Output token count: {len(result[1].choices[0].message.content.split(" "))}")
+                        await f.write(result[1].choices[0].message.content.strip("```").strip("json"))
             except Exception as e:
                 print(f"Task failed with error: {e}")
                 completed_count += 1
@@ -899,7 +907,7 @@ def extract_bl_shelfmark(locations_str: str) -> str:
     :type locations_str: str
     """
     # These 4 patterns match all 686 
-    three_part_re = re.compile(r"([o° 0-9lI]+[\.,])([a-z13]+[\.,])([ 0-9lI()]+)")
+    three_part_re = re.compile(r"([o° 0-9lI]+[\.,])([a-z13]+[\.,])([ 0-9lIO()]+)")
     jav_re = re.compile(r"Jav\. ?[\d()]+")
     
     orb_re = re.compile(r"ORB\. ?[0-9]+/[0-9]+")
@@ -925,6 +933,8 @@ def extract_bl_shelfmark(locations_str: str) -> str:
             p3 = p3.replace("l", "1")
         if "I" in p3:
             p3 = p3.replace("I", "1")
+        if "O" in p3:
+            p3 = p3.replace("O", "0")
         
         # TODO add "O"/ "0" replacement for p3
 
@@ -933,13 +943,13 @@ def extract_bl_shelfmark(locations_str: str) -> str:
     grp = jav_re.search(bl_loc[0])
     if grp:
         # TODO convert Jav. XX to Jav.XX (how listed in ATG's docs)
-        sm = grp.group()
+        sm = grp.group().replace(" ", "")
         return sm
     
     grp = orb_re.search(bl_loc[0])
     if grp:
         # TODO convert ORB. XX to ORB.XX (how listed in ATG's docs)
-        sm = grp.group()
+        sm = grp.group().replace(" ", "")
         return sm
     
     grp = siam_re.search(bl_loc[0])
@@ -962,24 +972,49 @@ def process_output_to_csv(json_dict: dict[str, str | dict[str, list[dict[str, st
         if json == "JSON DECODE FAILURE":
             metadata_lines.append(pd.DataFrame({"short_title": short_title, "edition": "JSON LOAD ERROR"}))
             continue
+        if "editions" not in json:
+            json["editions"] = json["properties"]["editions"]  # ty:ignore[invalid-argument-type, invalid-assignment]
+
+        if "items" in json["editions"]:  # ty:ignore[invalid-argument-type]
+            json["editions"] = json["editions"]["items"]  # ty:ignore[invalid-argument-type, invalid-assignment]
+
         for e in json["editions"]:  # ty:ignore[invalid-argument-type]
-            e["edition_name"] = e["edition_name"].replace("t", "†")
+            ed = e["edition_name"]
+            # known OCR errors
+            ed = ed.replace("t", "†").replace(" .•", ".a").replace("IS", "18")
             shelfmark = extract_bl_shelfmark(e["Location"])
 
-            try:
-                date = int(e["edition_name"].split(".")[0])
-                date_1 = str(date)
-                date_of_publication_in_arabic_or_roman_numerals = str(date)
-                if date <= 1886:
-                    method_of_acquisition = "purchased"
-                elif date >= 1887:
-                    method_of_acquisition = "legal deposit"
-            except ValueError:
-                date_1 = ""
-                date_of_publication_in_arabic_or_roman_numerals = ""
-                method_of_acquisition = ""
+            date = ed.split(".")[0]
+            method_of_acquisition = ""
+            date_of_publication_in_arabic_or_roman_numerals = ""
+            date_1, date_2 = "", ""
+            pub_date_type = "s"
+            if "-" in date:
+                date_1, date_2 = date.split("-")
+                if len(date_2) == 2:
+                    date_2 = date_1[:2] + date_2
+                pub_date_type = "m"
+                try:
+                    date = int(date_1)
+                    date_of_publication_in_arabic_or_roman_numerals = date_1
+                    if date <= 1886:
+                        method_of_acquisition = "purchased"
+                    elif date >= 1887:
+                        method_of_acquisition = "legal deposit"
+                except ValueError:
+                    pass
+            else:
+                try:
+                    date = int(date)
+                    date_1 = str(date)
+                    date_of_publication_in_arabic_or_roman_numerals = date_1
+                    if date <= 1886:
+                        method_of_acquisition = "purchased"
+                    elif date >= 1887:
+                        method_of_acquisition = "legal deposit"
+                except ValueError:
+                    pass
 
-            edition = e["edition_name"]
             name = e["author"]
             extracted_title = e["title"]
             if extracted_title == "<empty>":
@@ -988,16 +1023,20 @@ def process_output_to_csv(json_dict: dict[str, str | dict[str, list[dict[str, st
             publisher = e["publisher"]
             extent = e["extent"]
             dimensions = e["dimensions"]
+            language_note = e["script"]
             general_notes = e["printing_medium"]
-            citation_ref_note = f"Proudfoot 1993: {short_title} {e["edition_name"]}"
+            citation_ref_note = f"Proudfoot 1993: {short_title} {ed}"
             unclassified_text = e.get("unclassified_text", "")
 
             metadata = pd.DataFrame(
                 data={
                     "short_title": short_title,
-                    "edition": edition,
+                    "edition": ed,
                     "shelfmark": shelfmark,
+                    "type_of_pub_date": pub_date_type,
                     "date_1": date_1,
+                    "date_2": date_2,
+                    "language_note": language_note,
                     "name": name,
                     "title": extracted_title,
                     "place_of_publication": place_of_publication,
@@ -1006,7 +1045,6 @@ def process_output_to_csv(json_dict: dict[str, str | dict[str, list[dict[str, st
                     "extent": extent,
                     "dimensions": dimensions,
                     "general_notes": general_notes,
-                    # TODO convert bib note to 510 citation/ref note and modify format
                     "citation_ref_note": citation_ref_note,
                     "method_of_acquisition": method_of_acquisition,
                     "unclassified_text": unclassified_text
@@ -1050,11 +1088,14 @@ def post_process_extent(s: str) -> str:
 
 def post_process_dimensions(s: str) -> str:
     height_str = s.split("x")[0]
+    height_str = height_str.split(" pages")[0]
+    height_str = height_str.replace("on ", "")
     try:
         height = ceil(float(height_str))
         return str(height) + " cm"
     except ValueError:
-        return height_str
+
+        return height_str.split(" pages")[0]
 
 
 # TODO make title case
@@ -1079,7 +1120,6 @@ def post_process_csv(metadata_df: pd.DataFrame, header_template: pd.DataFrame) -
     marc_df = metadata_df.copy()
     marc_df.replace("<empty>", "", inplace=True)
     marc_df["shelfmark"] = map_orb_sm(marc_df["shelfmark"])
-    marc_df["type_of_publication_date"] = "s"
     marc_df["country_of_publication"] = "si"
     marc_df["index"] = 0
     marc_df["main_language"] = "may"
@@ -1097,7 +1137,10 @@ def post_process_csv(metadata_df: pd.DataFrame, header_template: pd.DataFrame) -
     
     marc_df.rename(columns={
         'shelfmark': 'Shelfmark',
+        'type_of_pub_date': 'Type of publication date',
         'date_1': 'Date 1',
+        'date_2': 'Date 2',
+        'language_note': 'Language note',
         'name': 'Name',
         'title': 'Title',
         'place_of_publication': 'Place of publication',

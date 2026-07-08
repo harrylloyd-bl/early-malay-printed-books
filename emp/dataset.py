@@ -2,7 +2,7 @@ from emp.config import DATA_DIR
 import aiofiles
 import asyncio
 from collections.abc import Callable
-from copy import copy
+from copy import copy, deepcopy
 import json
 import logging
 from math import ceil
@@ -56,7 +56,7 @@ def preprocess_text(text: dict[str, dict[int, str]]) -> dict[str, dict[int, str]
     Correct errors in the OCR text so it's ready for use
     """
     # Description section
-
+    text = deepcopy(text)
     # OCR error on page header
     if text["desc"][383][0] == "_":
         text["desc"][383] = text["desc"][383][10:]
@@ -88,13 +88,17 @@ def preprocess_text(text: dict[str, dict[int, str]]) -> dict[str, dict[int, str]
     # accidental double column
     # the small amount of extracted is the only main work among collected ceretera/cerita/ceritera/cetera
     if text["titles"][721][:5] == '"Chre':
-        text["titles"][721] = text["titles"][721][2613:2657].replace("\n", "")
+        text["titles"][721] = "Title\n" + text["titles"][721][2613:2657].replace("\n", "")
 
     # accidental double columns
     # the small amount of extracted is the only main work among collected ceretera/cerita/ceritera/cetera
     if text["titles"][722][:5] == "TI1LE":
-        text["titles"][722] = "Cerita Rampai-Rampai 1916 (t) - see also Abu Nawas 1917"
+        text["titles"][722] = "Title\nCerita Rampai-Rampai 1916 (t) - see also Abu Nawas 1917"
 
+    # accidental double columns
+    # title has been missed off so first line is being dropped
+    if text["titles"][768][:5] == "Peran":
+        text["titles"][768] = "Title\n" + text["titles"][768]
     return text
 
 
@@ -243,6 +247,10 @@ def select_works(all_titles: list[str]) -> pd.DataFrame:
     # Transcription error in the 'also'
     # 'Masalah Seribu 1870. 1888 - see a/so.Sepuluh Ceretera a 1860s'
 
+    # This work doesn't appear correctly in the ceritera section but is a valid work in the Description
+    # Possibly an error in Proudfoot
+    # 'Ceritera Indah 1860'
+
     # Chose this way of including erroneous entries to preserve order
     # find_nearest_line & apply_find_nearest both require Title section title order to be preserved
     manual_entry = ['Catechism 1817,', 'I1mu Kejadian a', 'I1mu Kepandaian', 'Masalah Seribu ', 'Jalan Kepandaia']
@@ -252,7 +260,10 @@ def select_works(all_titles: list[str]) -> pd.DataFrame:
             works.append(title)
             manual_entry.remove(title[:15])
         elif see_re.search(title) or "look" in title:
-            continue    
+            continue
+        elif title == 'Cendawan Putih 1893, 1894.a,.b (t), 1900, 1903, 1910; 1913':
+            works.append(title)
+            works.append('Ceritera Indah 1860')
         else:
             works.append(title)
 
@@ -587,38 +598,63 @@ def extract_clean_entries(manual_check_df: pd.DataFrame, title_loc_df: pd.DataFr
         "Ahmad dan Muhammad a,": "Ahmad dan Muhammad",
         "Air Lailah wa Lailah": "Alf Lailah wa Lailah",
         "A~ir Hamzah": "Amir Hamzah",
+        "Arsyadaka 'L1ah": "Arsyadaka 'Llah",
+        "Benib Babasa": "Benih Bahasa",
+        "Benib Pelajaran": "Benih Pelajaran",
+        "Benib Babasa": "Benih Pengetahuan",
         "Bab al-Baj'": "Bab al-Bai'",
         "Bahjat al-Mardhiyat": "Bahjat aI-Mardhiyat",
         "Gemala . Hikmat": "Gemala Hikmat",
         "Hafiz ai-Islam": "Hafiz al-Islam",
         "Haij dan Umrah": "Hajj dan Umrah",
         "Hakikat ai-Islam": "Hakikat al-Islam",
+        "I1mu Alam": "Ilmu Alam",
         "I1mu Falak": "Ilmu Falak",
+        "I1mu Hisab": "Ilmu Hisab",
         "I1mu Kejadian": "Ilmu Kejadian",
         "I1mu Kepandaian": "Ilmu Kepandaian",
+        "I1mu Kira-Kira": "Ilmu Kira-Kira",
         "I1mu Nasib": "Ilmu Nasib",
+        "Jalan 8elajar": "Jalan Belajar",
+        "Jiografi dan Sejarab": "Jiografi dan Sejarah",
         "Joban Maligan": "Johan Maligan",
         "Kamus Keeil": "Kamus Kecil",
+        "Kisah-Kisah Kitab lojil": "Kisah-Kisah Kitab Injil",
+        "Kunci Pengbampar": "Kunci Penghampar",
+        "Labor": "Lahor",
+        "Labod": "Lahud",
         "Lataif al-Tabarat": "Lataif al-Taharat",
         "Mabsyar": "Mahsyar",
         "Majmuab al-Syariab": "Majmuah al-Syariah",
+        "Makan Sirib": "Makan Sirih",
+        'Misal "uruf Rumi': "Misal Huruf Rumi",
+        "Mukaddam AIif-Ba-Ta": "Mukaddam Alif-Ba-Ta", 
         "Pelajaran Bahasa Melayu (No.l)": "Pelajaran Bahasa Melayu (No.1)",
+        "": "Pelajaran Bahasa Melayu b",
         "Nabi Labir": "Nabi Lahir",
+        "Nafsu Zinab": "Nafsu Zinah",
         "Nailab": "Nailah",
         "Nakboda Muda": "Nakhoda Muda",
-        "": "Nasihat Bapa",
-        "": "Pelajaran Bahasa Melayu b",
+        "Nyanyi.Nyanyian": "Nyanyi-Nyanyian",
         "Pengajaran di at as Bukit": "Pengajaran di atas Bukit",
         "Perang ZaituD": "Perang Zaitun",
+        "Petita Menyurat": "Pelita Menyurat",
         "Puji.Pujian": "Puji-Pujian",
+        "Puji.Pujian Methodist": "Puji-Pujian Methodist",
+        "Romanised MaJay Spelling": "Romanised Malay Spelling",
         "Sabar AIi": "Sabar Ali",
+        "Sanbe Baojian": "Sanhe Baojian",
+        "Sejarab Melayu": "Sejarah Melayu",
+        "Sejarab Terengganu": "Sejarah Terengganu",
         "Sullam al·Mubtadi": "Sullam al-Mubtadi",
+        "Syair l ... ]": "Syair [ ... ]",
+        "Tangga Pengetabuan": "Tangga Pengetahuan",
         "Umm al-Burban": "Umm al-Burhan",
         "Umm al-Madbabib": "Umm al-Madhahib",
         "Undang-Undang Cabaya": "Undang-Undang Cahaya",
+        "Undang-Undang Metbodist": "Undang-Undang Methodist",
         "Yatim Mustafa": "Yalim Mustafa",
         "Vue Fei": "Yue Fei",
-        "": "llmu Kepandaian",
         "Silam Bari": "Šilam Bari",
     })
 

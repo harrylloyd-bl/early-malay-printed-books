@@ -261,9 +261,15 @@ def select_works(all_titles: list[str]) -> pd.DataFrame:
             manual_entry.remove(title[:15])
         elif see_re.search(title) or "look" in title:
             continue
-        elif title == 'Cendawan Putih 1893, 1894.a,.b (t), 1900, 1903, 1910; 1913':
+        elif title == 'Cerita Rampai-Rampai 1916 (t) - see also Abu Nawas 1917':
             works.append(title)
             works.append('Ceritera Indah 1860')
+        elif title == "Vocabulary: Santa Maria 1859":
+            # These two aren't alphabetical in the title list for some reason
+            # Add Shellabear after Santa Maria then remove the first Shellabear which precedes SM
+            works.append(title)
+            works.append("Vocabulary: Shellabear 1902, 1912 - see also Dictionary: Shellabear 1916")
+            works.remove("Vocabulary: Shellabear 1902, 1912 - see also Dictionary: Shellabear 1916")
         else:
             works.append(title)
 
@@ -540,59 +546,6 @@ def extract_clean_entries(manual_check_df: pd.DataFrame, title_loc_df: pd.DataFr
     
     title_loc_df["short_title_desc"] = title_loc_df["short_title_desc"].str.strip('"')
 
-    # TODO df.str.replace("I1mu", "Ilmu")
-    title_loc_df.loc["Akhbar", "entry_end"] = 2520 - 64
-    title_loc_df.loc["Akidat al-Munajjin", "entry_start"] = 2521 - 64  # Fix entry starting late due to bad title OCR
-    title_loc_df.loc["Akidat al-Munajjin", "entry_end"] = 2540 + 1  # Fix entry starting late due to bad title OCR
-    title_loc_df.loc["Alauddin", "entry_start"] = 2541 + 1
-
-    title_loc_df.loc["Bidayat al-Mubtadi", "entry_end"] = 9318  # Fix entry starting late due to bad title OCR
-    title_loc_df.loc["Bidayat al-Salikin", "entry_start"] = 9319  # Fix entry starting late due to bad title OCR
-
-    title_loc_df.loc["Fakih Sunda", "entry_start"] = 14376
-    title_loc_df.loc["Fan Tang", "entry_start"] = 14377  # Fix entry starting late due to bad OCR
-
-    title_loc_df.loc["Harapan", "entry_end"] = 16667
-    title_loc_df.loc["Haris Fadhillah", "entry_start"] = 16668
-
-    title_loc_df.loc["Hasan Masri", "entry_end"] = 17010
-    title_loc_df.loc["Hayat al-Hayawan", "entry_start"] = 17011
-
-    title_loc_df.loc["I1mu Falak", "entry_start"] = 18278 - 2  # Fix entry starting two lines late due to bad title OCR
-    title_loc_df.loc["I1mu Bintang", "entry_end"] = 18277 - 2
-
-    title_loc_df.loc["Jalan Kepandaian", "entry_start"] = 20027 - 3  # Fix entry starting three lines late due to bad title OCR
-
-    title_loc_df.loc["Makna Melayu Dalail", "entry_end"] = 25392
-    title_loc_df.loc["Makrifat al-Salat", "entry_start"] = 25393
-    title_loc_df.loc["Makrifat al-Salat", "entry_end"] = 25432
-    title_loc_df.loc["Malai Zaban", "entry_start"] = 25433
-
-    title_loc_df.loc["Pelajaran Bahasa Arab", "entry_end"] = 30966
-    title_loc_df.loc["Pelajaran Bahasa Melayu (No.l)", "entry_start"] = 30967  # Fix entry thrown by being very similar to next entry (Pelajaran ... (No.2))
-    title_loc_df.loc["Pelajaran Bahasa Melayu (No.l)", "entry_end"] = 31193
-
-    title_loc_df.loc["Sidapati", "entry_end"] = 40925
-    title_loc_df.loc["Sifat Duapuluh", "entry_start"] = 40926
-    title_loc_df.loc["Sifat Duapuluh", "entry_end"] = 41149
-
-    title_loc_df.loc["Sirat al-Mustakim", "entry_start"] = 41676 - 1  # Fix entry starting two lines late due to bad title OCR
-    title_loc_df.loc["Siraj al-Kalbi", "entry_end"] = 41675 - 1
-
-    title_loc_df.loc["Zubaidah", "entry_end"] = 51208  # Manually correct end of final entry
-
-    title_loc_df["entry_text"] = title_loc_df.apply(lambda x: "\n".join(desc_lines[x["entry_start"]: x["entry_end"] + 1]), axis=1)
-
-    title_loc_df.loc["Ibrahim dan Isaak", "entry_text"] = title_loc_df.loc["Ibrahim dan Isaak", "entry_text"].replace("14620.aI9(10)", "14620.a.19(10)")
-
-    title_loc_df.loc["Kapal Asap", "entry_text"] = title_loc_df.loc["Kapal Asap", "entry_text"].replace("14620.b.18{l0)", "14620.b.18(10)")
-    title_loc_df.loc["Mukhtasar Takbir", "entry_text"] = title_loc_df.loc["Mukhtasar Takbir", "entry_text"].replace("14623.cA", "14623.c.4")
-    title_loc_df.loc["Pungguk", "entry_text"] = title_loc_df.loc["Pungguk", "entry_text"].replace("14626.d.l1 (8)", "14626.d.11(8)")
-    title_loc_df.loc["San Guo", "entry_text"] = title_loc_df.loc["San Guo", "entry_text"].replace("14625.a9", "14625.a.9")
-    title_loc_df.loc["Sifat Duapuluh", "entry_text"] = title_loc_df.loc["Sifat Duapuluh", "entry_text"].replace("14620.g.20(-)", "14620.g.20(0)")
-    title_loc_df.loc["Sungging", "entry_text"] = title_loc_df.loc["Sungging", "entry_text"].replace("14626.eA", "14626.e.4")
-    title_loc_df.loc["Tract: Bugis", "entry_text"] = title_loc_df.loc["Tract: Bugis", "entry_text"].replace("1463303.38", "14633.a.38")
-
     title_loc_df = title_loc_df.rename(index={
         "Abdullah dan Sa bat": "Abdullah dan Sabat",
         "Ahmad dan Muhammad a,": "Ahmad dan Muhammad",
@@ -601,7 +554,7 @@ def extract_clean_entries(manual_check_df: pd.DataFrame, title_loc_df: pd.DataFr
         "Arsyadaka 'L1ah": "Arsyadaka 'Llah",
         "Benib Babasa": "Benih Bahasa",
         "Benib Pelajaran": "Benih Pelajaran",
-        "Benib Babasa": "Benih Pengetahuan",
+        "Benib Pengetahuan": "Benih Pengetahuan",
         "Bab al-Baj'": "Bab al-Bai'",
         "Bahjat al-Mardhiyat": "Bahjat aI-Mardhiyat",
         "Gemala . Hikmat": "Gemala Hikmat",
@@ -609,6 +562,7 @@ def extract_clean_entries(manual_check_df: pd.DataFrame, title_loc_df: pd.DataFr
         "Haij dan Umrah": "Hajj dan Umrah",
         "Hakikat ai-Islam": "Hakikat al-Islam",
         "I1mu Alam": "Ilmu Alam",
+        "I1mu Bintang": "Ilmu Bintang",
         "I1mu Falak": "Ilmu Falak",
         "I1mu Hisab": "Ilmu Hisab",
         "I1mu Kejadian": "Ilmu Kejadian",
@@ -647,6 +601,7 @@ def extract_clean_entries(manual_check_df: pd.DataFrame, title_loc_df: pd.DataFr
         "Sejarab Melayu": "Sejarah Melayu",
         "Sejarab Terengganu": "Sejarah Terengganu",
         "Sullam al·Mubtadi": "Sullam al-Mubtadi",
+        "Surat (al-)Kitab a,": "Surat al-Kitab",
         "Syair l ... ]": "Syair [ ... ]",
         "Tangga Pengetabuan": "Tangga Pengetahuan",
         "Umm al-Burban": "Umm al-Burhan",
@@ -657,6 +612,81 @@ def extract_clean_entries(manual_check_df: pd.DataFrame, title_loc_df: pd.DataFr
         "Vue Fei": "Yue Fei",
         "Silam Bari": "Šilam Bari",
     })
+
+    title_loc_df.loc["Abraham", "entry_end"] = 1103
+    title_loc_df.loc["Abu Nawas", "entry_start"] = 1104  # Fix entry starting late due to bad title OCR
+
+    title_loc_df.loc["Akhbar", "entry_end"] = 2520 - 64
+    title_loc_df.loc["Akidat al-Munajjin", "entry_start"] = 2521 - 64  # Fix entry starting late due to bad title OCR
+    title_loc_df.loc["Akidat al-Munajjin", "entry_end"] = 2540 + 1  # Fix entry starting late due to bad title OCR
+    title_loc_df.loc["Alauddin", "entry_start"] = 2541 + 1
+
+    title_loc_df.loc["Bidayat al-Mubtadi", "entry_end"] = 9318  # Fix entry starting late due to bad title OCR
+    title_loc_df.loc["Bidayat al-Salikin", "entry_start"] = 9319  # Fix entry starting late due to bad title OCR
+
+    title_loc_df.loc["Fakih Sunda", "entry_start"] = 14376
+    title_loc_df.loc["Fan Tang", "entry_start"] = 14377  # Fix entry starting late due to bad OCR
+
+    title_loc_df.loc["Harapan", "entry_end"] = 16667
+    title_loc_df.loc["Haris Fadhillah", "entry_start"] = 16668
+
+    title_loc_df.loc["Hasan Masri", "entry_end"] = 17010
+    title_loc_df.loc["Hayat al-Hayawan", "entry_start"] = 17011
+
+    title_loc_df.loc["Ilmu Falak", "entry_start"] = 18278 - 2  # Fix entry starting two lines late due to bad title OCR
+    title_loc_df.loc["Ilmu Bintang", "entry_end"] = 18277 - 2
+
+    title_loc_df.loc["Jalan Kepandaian", "entry_start"] = 20027 - 3  # Fix entry starting three lines late due to bad title OCR
+
+    title_loc_df.loc["Kisah-Kisah Kitab Injil", "entry_end"] = 23564  # Fix entry ending early due to next title reading order error
+
+    title_loc_df.loc["Makna Melayu Dalail", "entry_end"] = 25392
+    title_loc_df.loc["Makrifat al-Salat", "entry_start"] = 25393
+    title_loc_df.loc["Makrifat al-Salat", "entry_end"] = 25432
+    title_loc_df.loc["Malai Zaban", "entry_start"] = 25433
+
+    title_loc_df.loc["Pelajaran Bahasa Arab", "entry_end"] = 30966
+    title_loc_df.loc["Pelajaran Bahasa Melayu (No.1)", "entry_start"] = 30967  # Fix entry thrown by being very similar to next entry (Pelajaran ... (No.2))
+    title_loc_df.loc["Pelajaran Bahasa Melayu (No.1)", "entry_end"] = 31193
+
+    title_loc_df.loc["Scripture Tickets", "entry_end"] = 39940  # Fix entry starting late due to bad title OCR
+    title_loc_df.loc["Sejarah Melayu", "entry_start"] = 39941  # Fix entry starting late due to bad title OCR
+
+    title_loc_df.loc["Sidapati", "entry_end"] = 40925
+    title_loc_df.loc["Sifat Duapuluh", "entry_start"] = 40926
+    title_loc_df.loc["Sifat Duapuluh", "entry_end"] = 41149
+
+    title_loc_df.loc["Sirat al-Mustakim", "entry_start"] = 41676 - 1  # Fix entry starting two lines late due to bad title OCR
+    title_loc_df.loc["Siraj al-Kalbi", "entry_end"] = 41675 - 1
+
+    title_loc_df.loc["Zubaidah", "entry_end"] = 51208  # Manually correct end of final entry
+
+    title_loc_df["entry_text"] = title_loc_df.apply(lambda x: "\n".join(desc_lines[x["entry_start"]: x["entry_end"] + 1]), axis=1)
+
+    title_loc_df.loc["Bible: Matthew", "entry_text"] = title_loc_df.loc["Bible: Matthew", "entry_text"].replace("~4620.a.30", "14620.a.30")
+    title_loc_df.loc["Bidasari", "entry_text"] = title_loc_df.loc["Bidasari", "entry_text"].replace("14653.bA", "14653.b.4")
+    title_loc_df.loc["Cakrawala", "entry_text"] = title_loc_df.loc["Cakrawala", "entry_text"].replace("14620.d. I 7(6)", "14620.d.17(6)")
+    title_loc_df.loc["Dictionary: Wilkinson", "entry_text"] = title_loc_df.loc["Dictionary: Wilkinson", "entry_text"].replace("15012'[a.l", "15012.fa.1")
+    title_loc_df.loc["Gemala Hikmat", "entry_text"] = title_loc_df.loc["Gemala Hikmat", "entry_text"].replace("14653.dAO", "14653.d.40")
+    title_loc_df.loc["Hang Tuah", "entry_text"] = title_loc_df.loc["Hang Tuah", "entry_text"].replace("14653.dA3(1)", "14653.d.43(1)")
+    title_loc_df.loc["Ibrahim dan Isaak", "entry_text"] = title_loc_df.loc["Ibrahim dan Isaak", "entry_text"].replace("14620.aI9(10)", "14620.a.19(10)")
+    title_loc_df.loc["Kapal Asap", "entry_text"] = title_loc_df.loc["Kapal Asap", "entry_text"].replace("14620.b.18{l0)", "14620.b.18(10)")
+    title_loc_df.loc["Kelakuan Orang", "entry_text"] = title_loc_df.loc["Kelakuan Orang", "entry_text"].replace("14620.h.18(5)", "14620.b.18(5)")
+    title_loc_df.loc["Kelakuan Orang", "entry_text"] = title_loc_df.loc["Kelakuan Orang", "entry_text"].replace("14654.h.22", "14654.b.22")
+    title_loc_df.loc["Makan Sirih", "entry_text"] = title_loc_df.loc["Makan Sirih", "entry_text"].replace("14654.b.59(2(3 ", "14654.b.59(2(3))")
+    title_loc_df.loc["Mazlan", "entry_text"] = title_loc_df.loc["Mazlan", "entry_text"].replace("14625.eA", "14625.e.4")
+    title_loc_df.loc["Mukhtasar Takbir", "entry_text"] = title_loc_df.loc["Mukhtasar Takbir", "entry_text"].replace("14623.cA", "14623.c.4")
+    title_loc_df.loc["Orang yang Cari Selamat", "entry_text"] = title_loc_df.loc["Orang yang Cari Selamat", "entry_text"].replace("I4653.d.28 ", "14653.d.28")
+    title_loc_df.loc["Pelayaran Abdullah", "entry_text"] = title_loc_df.loc["Pelayaran Abdullah", "entry_text"].replace("14628.c.1 (2)*", "14628.c.1(2)*")
+    title_loc_df.loc["Puji-Pujian", "entry_text"] = title_loc_df.loc["Puji-Pujian", "entry_text"].replace("14620.h.14(7)", "14620.b.14(7)").replace("14620.h.24", "14620.b.24")
+    title_loc_df.loc["Pungguk", "entry_text"] = title_loc_df.loc["Pungguk", "entry_text"].replace("14626.d.l1 (8)", "14626.d.11(8)")
+    title_loc_df.loc["Salasilah Kedah", "entry_text"] = title_loc_df.loc["Salasilah Kedah", "entry_text"].replace("14624.d2", "14624.d.2")
+    title_loc_df.loc["San Guo", "entry_text"] = title_loc_df.loc["San Guo", "entry_text"].replace("14625.a9", "14625.a.9")
+    title_loc_df.loc["Sifat Duapuluh", "entry_text"] = title_loc_df.loc["Sifat Duapuluh", "entry_text"].replace("14620.g.20(-)", "14620.g.20(0)")
+    title_loc_df.loc["Sungging", "entry_text"] = title_loc_df.loc["Sungging", "entry_text"].replace("14626.eA", "14626.e.4")
+    title_loc_df.loc["Tembakau", "entry_text"] = title_loc_df.loc["Tembakau", "entry_text"].replace("14654.b.59(2(1", "14654.b.59(2(1))")
+    title_loc_df.loc["Tract: Bugis", "entry_text"] = title_loc_df.loc["Tract: Bugis", "entry_text"].replace("1463303.38", "14633.a.38")
+    title_loc_df.loc["Undang-Undang Kapal", "entry_text"] = title_loc_df.loc["Undang-Undang Kapal", "entry_text"].replace("14622.1:.15", "14622.b.15")
 
     return title_loc_df
 
@@ -943,7 +973,7 @@ def extract_bl_shelfmark(locations_str: str) -> str:
     :type locations_str: str
     """
     # These 4 patterns match all 686 
-    three_part_re = re.compile(r"([o° 0-9lI]+[\.,])([a-z13]+[\.,])([ 0-9lIO()]+)")
+    three_part_re = re.compile(r"([o° 0-9lI]+[\.,])([a-z13]+[\.,])([ 0-9lIOS()]+)")
     jav_re = re.compile(r"Jav\. ?[\d()]+")
     
     orb_re = re.compile(r"ORB\. ?[0-9]+/[0-9]+")
@@ -971,8 +1001,9 @@ def extract_bl_shelfmark(locations_str: str) -> str:
             p3 = p3.replace("I", "1")
         if "O" in p3:
             p3 = p3.replace("O", "0")
+        if "S" in p3:
+            p3 = p3.replace("S", "5")
         
-        # TODO add "O"/ "0" replacement for p3
 
         return p1.strip() + p2 + p3.strip()
 
@@ -1096,7 +1127,7 @@ def process_output_to_csv(json_dict: dict[str, str | dict[str, list[dict[str, st
 def map_orb_sm(series: pd.Series) -> pd.Series:
 
     map = {
-        'ORB. 30/445 ': 'ORB. 30/445 (IOLR Malay F6 306/36.GF.7',
+        'ORB. 30/445 ': 'ORB. 30/445 (IOLR Malay F6 306/36.GF.7)',
         'ORB. 30/446 ': 'ORB. 30/446 (IOLR Malay F6 306/36.G.8)',
         'ORB. 30/447 ': 'ORB. 30/447 (IOLR Malay F6 306/36.G.15)',
         'ORB. 30/448 ': 'ORB. 30/448 (IOLR Malay F6 306/36.G.16)',
@@ -1114,6 +1145,7 @@ def map_orb_sm(series: pd.Series) -> pd.Series:
     mapped_series = series.replace(map)
 
     return mapped_series
+
 
 def post_process_extent(s: str) -> str:
     if "pp" in s[:10]:

@@ -1,13 +1,24 @@
+from emp.config import DATA_DIR
+import aiofiles
+import asyncio
 from collections.abc import Callable
-from copy import copy
+from copy import copy, deepcopy
 import json
-from random import sample
+import logging
+from math import ceil
+import os
 import re
 import warnings
 
+import aiohttp
+from dotenv import load_dotenv
+from openai import AsyncOpenAI
 import pandas as pd
 import pymupdf
 from rapidfuzz import fuzz, utils, process
+from tqdm.asyncio import tqdm
+
+load_dotenv()
 
 
 def parse_proudfoot(f: str) -> dict[str, dict[int, str]]:
@@ -34,7 +45,7 @@ def parse_proudfoot(f: str) -> dict[str, dict[int, str]]:
             break
 
         if section:
-            page_text = page.get_text() # get plain text (is in UTF-8)
+            page_text = page.get_text() # get plain text (is in UTF-8)  # ty:ignore[unresolved-attribute]
             text[section][i] = page_text
 
     return text
@@ -45,7 +56,7 @@ def preprocess_text(text: dict[str, dict[int, str]]) -> dict[str, dict[int, str]
     Correct errors in the OCR text so it's ready for use
     """
     # Description section
-
+    text = deepcopy(text)
     # OCR error on page header
     if text["desc"][383][0] == "_":
         text["desc"][383] = text["desc"][383][10:]
@@ -77,13 +88,17 @@ def preprocess_text(text: dict[str, dict[int, str]]) -> dict[str, dict[int, str]
     # accidental double column
     # the small amount of extracted is the only main work among collected ceretera/cerita/ceritera/cetera
     if text["titles"][721][:5] == '"Chre':
-        text["titles"][721] = text["titles"][721][2613:2657].replace("\n", "")
+        text["titles"][721] = "Title\n" + text["titles"][721][2613:2657].replace("\n", "")
 
     # accidental double columns
     # the small amount of extracted is the only main work among collected ceretera/cerita/ceritera/cetera
     if text["titles"][722][:5] == "TI1LE":
-        text["titles"][722] = "Cerita Rampai-Rampai 1916 (t) - see also Abu Nawas 1917"
+        text["titles"][722] = "Title\nCerita Rampai-Rampai 1916 (t) - see also Abu Nawas 1917"
 
+    # accidental double columns
+    # title has been missed off so first line is being dropped
+    if text["titles"][768][:5] == "Peran":
+        text["titles"][768] = "Title\n" + text["titles"][768]
     return text
 
 
@@ -152,11 +167,11 @@ def gen_title_lines(text: dict[str, dict[int, str]]) -> list[str]:
         page = text["titles"][i]
         processed_title_pages.append(preprocess_titles_page(page=page, page_num=page_num))
 
-    title_lines = []
+    all_titles = []
     for p in processed_title_pages:
-        title_lines.extend(p)
+        all_titles.extend(p)
     
-    return title_lines
+    return all_titles
 
 
 def gen_desc_lines(text: dict[str, dict[int, str]]) -> tuple[list[str], dict[int, int]]:
@@ -222,15 +237,64 @@ def select_works(all_titles: list[str]) -> pd.DataFrame:
     see_re = re.compile(r"see(?! also)")
 
     works = []
+
+    # Works added by manual_entry
+    # These work contains a naked 'see' at the end but are true works
+    # 'Catechism 1817, 1819.a, .b, .c, 1820, 1821.a, .b, 1824.a, .b, 1825.a, .b, 1827, 1828, 1830, 1831, 1832, 1834, 1835.a, .b, 1836, 1837, 1839, 1887, 1895.a, .b, 1905, 1916t - see also Pengajaran Masihi a 1840s, 1894.a, 1894.b, 1913; Pengutib Segala Remah 1852; Tanya-Saut 1885; also: Muslim Catechism, see Suluhan Mubtadi 1918'
+    # 'I1mu Kejadian a ±1841, 1857, 1887 - see also Tabiat Jenis-Jenis Kejadian 1848; -? for later version, see Ilmu Bintang a ±1889'
+    # 'I1mu Kepandaian a ±1840, 1843, 1855, 1865, 1866, 1872 - for later version, see Jalan Kepandaian 1876, 1878, 1881, 1885, 1890, 1914'
+
+    # Transcription error in the 'also'
+    # 'Masalah Seribu 1870. 1888 - see a/so.Sepuluh Ceretera a 1860s'
+
+    # This work doesn't appear correctly in the ceritera section but is a valid work in the Description
+    # Possibly an error in Proudfoot
+    # 'Ceritera Indah 1860'
+
+    # Chose this way of including erroneous entries to preserve order
+    # find_nearest_line & apply_find_nearest both require Title section title order to be preserved
+    manual_entry = ['Catechism 1817,', 'I1mu Kejadian a', 'I1mu Kepandaian', 'Masalah Seribu ', 'Jalan Kepandaia']
+
     for title in all_titles:
-        if see_re.search(title) or "look" in title:
-            continue    
+        if title[:15] in manual_entry:
+            works.append(title)
+            manual_entry.remove(title[:15])
+        elif see_re.search(title) or "look" in title:
+            continue
+        elif title == 'Cerita Rampai-Rampai 1916 (t) - see also Abu Nawas 1917':
+            works.append(title)
+            works.append('Ceritera Indah 1860')
+        elif title == "Vocabulary: Santa Maria 1859":
+            # These two aren't alphabetical in the title list for some reason
+            # Add Shellabear after Santa Maria then remove the first Shellabear which precedes SM
+            works.append(title)
+            works.append("Vocabulary: Shellabear 1902, 1912 - see also Dictionary: Shellabear 1916")
+            works.remove("Vocabulary: Shellabear 1902, 1912 - see also Dictionary: Shellabear 1916")
         else:
             works.append(title)
 
     # This cf is the only incorrect one not caught by the 'see' regex
     works.remove('Adab Kesopanan bagi Orang Muda-Muda Anak yang Bangsawan - cf Adab aI-Fatiy 1916')
-    return pd.DataFrame(works, columns=["title"])
+
+    # merged works
+    works.remove('Kita ... : merged with Kitab ... below')
+    works.remove('Kitab al- ... : listed below, ignoring al- Kitab Adab Kesopanan bagi Orang Muda-Muda Anak yang Bangsawan - cl Adab al-Fatiy 1916')
+
+    # This work is 'see also' but not bolded and doesn't appear in the Descriptions
+    works.remove('Tablil - see also Puji-Pujian 1840.a, c 1850s. 1855, 1896')
+
+    # Correct title extracted in wrong place
+    # There are other duplicates removed by the is_unique check in gen_short_titles
+    works.remove('Nasihat Bapa 1890')
+    works.remove('Nur Muhammad a 1907, 1871, 1889, 1899, 1901, 1918; Sinar Gemala 1894; Siraj al- Alam 1921; Tashil al-Ghabi 1906')
+    works.remove('Hitung Cabut a ±1887, 1890, 1893, 1903t; Ilmu Hisab 1825; Ilmu Kira-Kira 1874, a 1880s, 1898; Ilmu Kira-Kira: Howell 1892; Jawab Ilmu Kira-Kira 1893; Sifrr 1886')
+    works.remove('Surat Tuan Church 1838')
+
+    # Bible is in alphabetical order in Titles and reading order in Description
+    bible_order = (89, 101, 93, 92, 103, 102, 100, 94, 99, 98, 97, 96, 90, 91, 104)
+    works[89:105] = [works[x] for x in bible_order]
+    
+    return pd.DataFrame(works, columns=["title"])  # ty:ignore[invalid-argument-type]
 
 
 def shorten_proudfoot_title(title: str) -> str:
@@ -272,7 +336,7 @@ def shorten_aac_title(title: str) -> str:
     return clean_short_title
 
 
-def gen_short_titles(works: pd.DataFrame, converter: Callable[[str], str]) -> pd.DataFrame:
+def gen_short_titles(works_df: pd.DataFrame, converter: Callable[[str], str]) -> pd.DataFrame:
     """
     Convert a list of main works into their short titles equivalents
     
@@ -281,30 +345,32 @@ def gen_short_titles(works: pd.DataFrame, converter: Callable[[str], str]) -> pd
     :return: Short title equivalents for those works
     :rtype: Series[str]
     """
-    if "title" not in works.columns:
+    if "title" not in works_df.columns:
         raise ValueError("`title` column missing")
-    works["short_title_titles"] = works["title"].apply(converter)
+    works_df["short_title_titles"] = works_df["title"].apply(converter)
 
     # Some work are duplicated due to line breaks converting "see <name of work>" to "see\n<name of work>", in which case the work gets picked up again
-    if not works["short_title_titles"].is_unique:
-        works = works.drop_duplicates(subset="short_title_titles").reset_index(drop=True)
-    
-    return works
+    if not works_df["short_title_titles"].is_unique:
+        works_df = works_df.drop_duplicates(subset="short_title_titles").reset_index(drop=True)
+        
+    return works_df
 
 
-def gen_aac_list(aac_file: str) -> pd.DataFrame:
+# TODO review this, may be superseded by corrections in notebooks
+# or may need to be updated once all corrections to Boll and full AAC have been done
+def gen_aac_df(aac_file: str) -> pd.DataFrame:
     """
     Import the list of all AAC works
     
     :param aac_file: The filepath for the AAC list of works
     :type aac_file: str
     """
-    aac_list = pd.read_csv(aac_file, header=None, names=["shelfmark", "short_title", "year"], usecols=[0,1,2])
-    aac_list["short_title_no_year"] = aac_list["short_title"].apply(shorten_aac_title)
-    return aac_list
+    aac_df = pd.read_csv(aac_file, header=None, names=["shelfmark", "short_title", "year"], usecols=[0,1,2])  # ty:ignore[no-matching-overload]
+    aac_df["short_title_no_year"] = aac_df["short_title"].apply(shorten_aac_title)
+    return aac_df
 
 
-def lookup_aac_titles(aac_df: pd.DataFrame, works: pd.DataFrame) -> list[tuple[str, str]]:
+def lookup_aac_titles(aac_df: pd.DataFrame, works_df: pd.DataFrame) -> list[tuple[str, str]]:
     """
     Compare the list of AAC works to the list of main works to calculate how many works are represented
     
@@ -313,12 +379,12 @@ def lookup_aac_titles(aac_df: pd.DataFrame, works: pd.DataFrame) -> list[tuple[s
     :param works: sorted list of Title works appearing in the AAC list
     :type works: list[tuple[str, str]]
     """
-    matched_works = [(w, w) for w in aac_df["short_title_no_year"].unique() if w in works]
-    missing_works = [w for w in aac_df["short_title_no_year"].unique() if w not in works]
+    matched_works = [(w, w) for w in aac_df["short_title_no_year"].unique() if w in works_df]
+    missing_works = [w for w in aac_df["short_title_no_year"].unique() if w not in works_df]
 
     missing_work_matches = []
     for w in missing_works:
-        matches = process.extract(w, works["short_title_titles"], scorer=fuzz.ratio, limit=3, processor=utils.default_process)
+        matches = process.extract(w, works_df["short_title_titles"], scorer=fuzz.ratio, limit=3, processor=utils.default_process)
         missing_work_matches.append([w, matches])
 
     accepted_matches = []
@@ -330,7 +396,40 @@ def lookup_aac_titles(aac_df: pd.DataFrame, works: pd.DataFrame) -> list[tuple[s
             failed_matches.append((w, matches))
 
     matched_works += [(w[0], w[1]) for w in accepted_matches]
-    return sorted(matched_works)
+    return matched_works
+
+
+def gen_title_loc_df(works_df: pd.Series, desc_lines: list[str]) -> pd.DataFrame:
+    """
+    Create a dataframe of work titles and their matched aliases in the description section
+    Matches only if the work string is present identically for a given entry
+    
+    :param works: Description
+    :type works: pd.Series
+    :param description_lines: Description
+    :return: Description
+    :rtype: DataFrame
+    """
+    title_loc = []
+    title_line_tracker = 0  # This has to be accurate for it to work, otherwise can get too large too quickly
+
+    for w in works_df:
+        line_window = desc_lines[title_line_tracker: title_line_tracker + 2000]
+        if w in line_window:
+            line_loc = line_window.index(w) + title_line_tracker
+            title_loc.append((w, None, line_loc, title_line_tracker, title_line_tracker + 2000))
+            title_line_tracker = line_loc
+        else:
+            title_loc.append((w, None, None, title_line_tracker, title_line_tracker + 2000))
+
+    title_loc_df = pd.DataFrame(title_loc, columns=["short_title_titles", "short_title_desc", "entry_start", "min_line", "max_line"])  # ty:ignore[invalid-argument-type]
+    title_loc_df["entry_start"] = title_loc_df["entry_start"].astype("Int64")
+    
+    if not title_loc_df["entry_start"].dropna().is_monotonic_increasing:
+        warnings.warn("Catalogue entry start lines do not monotonically increase. Check title dataframe sorting.", UserWarning)
+
+    assert title_loc_df["short_title_titles"].is_unique
+    return title_loc_df.set_index("short_title_titles")
 
 
 def find_nearest_line(row: pd.Series, desc_lines: list[str]) -> tuple[str, float, str]:
@@ -347,43 +446,12 @@ def find_nearest_line(row: pd.Series, desc_lines: list[str]) -> tuple[str, float
     :rtype: tuple[str, float, str]
     """
     possible_lines = desc_lines[row["min_line"]:row["max_line"]]
+    short_title_title: str = row.name  # ty:ignore[invalid-assignment]
     if row["entry_start"] is pd.NA:
-        nearest_line = process.extract(row["short_title_titles"], possible_lines, scorer=fuzz.ratio, limit=1, processor=utils.default_process)[0]
+        nearest_line = process.extract(short_title_title, possible_lines, scorer=fuzz.ratio, limit=1, processor=utils.default_process)[0]
         return (nearest_line[0], nearest_line[1], nearest_line[2] + row["min_line"])
     else:
-        return (row["short_title_titles"], 100.0, row["entry_start"])
-
-
-def gen_title_loc_df(works: pd.Series, desc_lines: list[str]) -> pd.DataFrame:
-    """
-    Create a dataframe of work titles and their matched aliases in the description section
-    Matches only if the work string is present identically for a given entry
-    
-    :param works: Description
-    :type works: pd.Series
-    :param description_lines: Description
-    :return: Description
-    :rtype: DataFrame
-    """
-    title_loc = []
-    title_line_tracker = 0  # This has to be accurate for it to work, otherwise can get too large too quickly
-
-    for w in works:
-        line_window = desc_lines[title_line_tracker: title_line_tracker + 2000]
-        if w in line_window:
-            line_loc = line_window.index(w) + title_line_tracker
-            title_loc.append((w, None, line_loc, title_line_tracker, title_line_tracker + 2000))
-            title_line_tracker = line_loc
-        else:
-            title_loc.append((w, None, None, title_line_tracker, title_line_tracker + 2000))
-
-    title_loc_df = pd.DataFrame(title_loc, columns=["short_title_titles", "short_title_desc", "entry_start", "min_line", "max_line"])
-    title_loc_df["entry_start"] = title_loc_df["entry_start"].astype("Int64")
-    
-    if not title_loc_df["entry_start"].dropna().is_monotonic_increasing:
-        warnings.warn("Catalogue entry start lines do not monotonically increase. Check title dataframe sorting.", UserWarning)
-
-    return title_loc_df
+        return (short_title_title, 100.0, row["entry_start"])
 
 
 def apply_find_nearest(title_loc_df: pd.DataFrame, desc_lines: list[str]) -> pd.DataFrame:
@@ -402,7 +470,7 @@ def apply_find_nearest(title_loc_df: pd.DataFrame, desc_lines: list[str]) -> pd.
     title_loc_df["similarity"] = nearest_apply.apply(lambda x: x[1])
     title_loc_df["nearest_line_idx"] = nearest_apply.apply(lambda x: x[2])
 
-    title_loc_df.loc[title_loc_df["similarity"] >= 90, "short_title_desc"] = title_loc_df.loc[title_loc_df["similarity"] >= 90, "short_title_titles"]
+    title_loc_df.loc[title_loc_df["similarity"] >= 90, "short_title_desc"] = title_loc_df.loc[title_loc_df["similarity"] >= 90].index
     title_loc_df.loc[title_loc_df["similarity"] >= 90, "entry_start"] = title_loc_df.loc[title_loc_df["similarity"] >= 90, "nearest_line_idx"]
 
     return title_loc_df
@@ -420,16 +488,25 @@ def gen_manual_check_df(title_loc_df: pd.DataFrame, line_page_lookup: dict[int, 
     :rtype: DataFrame
     """
     missing_with_adjacent = []
-    for t in title_loc_df.loc[title_loc_df["entry_start"].isna()].index:
-        missing_with_adjacent += [t-1, t, t+1]
-
-    blank_manual_check_df = title_loc_df.loc[sorted(list(set(missing_with_adjacent)))[:-1]]
-    blank_manual_check_df["min_line_page"] = blank_manual_check_df["min_line"].map(line_page_lookup)
     
+    missing_start_idx = title_loc_df.loc[title_loc_df["entry_start"].isna()].index
+    for t in missing_start_idx:
+        idx_loc = title_loc_df.index.get_loc(t)
+        missing_with_adjacent += [idx_loc-1, idx_loc, idx_loc+1]
+
+    if -1 in missing_with_adjacent:
+        missing_with_adjacent.remove(-1)
+    if len(title_loc_df) in missing_with_adjacent:
+        missing_with_adjacent.remove(len(title_loc_df))
+
+    blank_manual_check_df = title_loc_df.iloc[sorted(list(set(missing_with_adjacent)))[:-1], :].copy()
+    blank_manual_check_df["min_line_page"] = blank_manual_check_df["min_line"].map(line_page_lookup)
+    blank_manual_check_df.insert(0, "approve", "")
+
     return blank_manual_check_df
 
 
-def extract_clean_entries(manual_check_df: pd.DataFrame, title_loc_df: pd.DataFrame, description_lines: list[str]) -> pd.DataFrame:
+def extract_clean_entries(manual_check_df: pd.DataFrame, title_loc_df: pd.DataFrame, desc_lines: list[str]) -> pd.DataFrame:
     """
     Apply the info in a manual check csv for whether short titles mappings are correct to the titles df
     Check the integrity of the manual check csv
@@ -438,8 +515,11 @@ def extract_clean_entries(manual_check_df: pd.DataFrame, title_loc_df: pd.DataFr
     Extract entry text to new column
     
     :param manual_check_df: DataFrame created from a csv used to manually check whether fuzzy.ratio mappings for short titles are correct
+    :type manual_check_df pd.DataFrame
     :param title_loc_df: The df of all titles and their locations in the Descriptions section
-    :param description_lines: List of all Descriptions section lines 
+    :type title_loc_df: pd.DataFrame
+    :param desc_lines: List of all Descriptions section lines 
+    :type desc_lines: list[str]
     :rtype: DataFrame
     """
     # check all missing titles have been manually checked
@@ -452,7 +532,7 @@ def extract_clean_entries(manual_check_df: pd.DataFrame, title_loc_df: pd.DataFr
     manually_approved_idx = manually_approved_df.index
     to_exclude_idx = manual_check_df[manual_check_df["approve"] == -1].index
 
-    title_loc_df.loc[manually_approved_idx, "nearest_line"] = manually_approved_df["nearest_line_idx"].apply(lambda x: description_lines[x])
+    title_loc_df.loc[manually_approved_idx, "nearest_line"] = manually_approved_df["nearest_line_idx"].apply(lambda x: desc_lines[x])
     title_loc_df.loc[manually_approved_idx, "nearest_line_idx"] = manually_approved_df["nearest_line_idx"]
 
     title_loc_df.loc[manually_approved_idx, "entry_start"] = title_loc_df["nearest_line_idx"]
@@ -461,25 +541,739 @@ def extract_clean_entries(manual_check_df: pd.DataFrame, title_loc_df: pd.DataFr
     title_loc_df.drop(index=to_exclude_idx, inplace=True)
     
     title_loc_df["entry_end"] = title_loc_df["nearest_line_idx"].shift(-1).astype("Int64") - 1
-    title_loc_df["correct_title"] = title_loc_df["short_title_titles"]
-    
-    title_loc_df.loc[title_loc_df.query("short_title_titles == 'I1mu Falak'").index, "correct_title"] = "Ilmu Falak"
+
+    title_loc_df["correct_title"] = title_loc_df.index
     
     title_loc_df["short_title_desc"] = title_loc_df["short_title_desc"].str.strip('"')
 
-    title_loc_df.loc[title_loc_df.query("short_title_desc == 'IlmuFalak'").index, "entry_start"] = 18278 - 2  # Fix an entry starting two lines late due to bad title OCR
-    title_loc_df.loc[title_loc_df.query("short_title_desc == 'Ilmu Bintang'").index, "entry_end"] = 18277 - 2
+    title_loc_df = title_loc_df.rename(index={
+        "Abdullah dan Sa bat": "Abdullah dan Sabat",
+        "Ahmad dan Muhammad a,": "Ahmad dan Muhammad",
+        "Air Lailah wa Lailah": "Alf Lailah wa Lailah",
+        "A~ir Hamzah": "Amir Hamzah",
+        "Arsyadaka 'L1ah": "Arsyadaka 'Llah",
+        "Benib Babasa": "Benih Bahasa",
+        "Benib Pelajaran": "Benih Pelajaran",
+        "Benib Pengetahuan": "Benih Pengetahuan",
+        "Bab al-Baj'": "Bab al-Bai'",
+        "Bahjat al-Mardhiyat": "Bahjat aI-Mardhiyat",
+        "Gemala . Hikmat": "Gemala Hikmat",
+        "Hafiz ai-Islam": "Hafiz al-Islam",
+        "Haij dan Umrah": "Hajj dan Umrah",
+        "Hakikat ai-Islam": "Hakikat al-Islam",
+        "I1mu Alam": "Ilmu Alam",
+        "I1mu Bintang": "Ilmu Bintang",
+        "I1mu Falak": "Ilmu Falak",
+        "I1mu Hisab": "Ilmu Hisab",
+        "I1mu Kejadian": "Ilmu Kejadian",
+        "I1mu Kepandaian": "Ilmu Kepandaian",
+        "I1mu Kira-Kira": "Ilmu Kira-Kira",
+        "I1mu Nasib": "Ilmu Nasib",
+        "Jalan 8elajar": "Jalan Belajar",
+        "Jiografi dan Sejarab": "Jiografi dan Sejarah",
+        "Joban Maligan": "Johan Maligan",
+        "Kamus Keeil": "Kamus Kecil",
+        "Kisah-Kisah Kitab lojil": "Kisah-Kisah Kitab Injil",
+        "Kunci Pengbampar": "Kunci Penghampar",
+        "Labor": "Lahor",
+        "Labod": "Lahud",
+        "Lataif al-Tabarat": "Lataif al-Taharat",
+        "Mabsyar": "Mahsyar",
+        "Majmuab al-Syariab": "Majmuah al-Syariah",
+        "Makan Sirib": "Makan Sirih",
+        'Misal "uruf Rumi': "Misal Huruf Rumi",
+        "Mukaddam AIif-Ba-Ta": "Mukaddam Alif-Ba-Ta", 
+        "Pelajaran Bahasa Melayu (No.l)": "Pelajaran Bahasa Melayu (No.1)",
+        "": "Pelajaran Bahasa Melayu b",
+        "Nabi Labir": "Nabi Lahir",
+        "Nafsu Zinab": "Nafsu Zinah",
+        "Nailab": "Nailah",
+        "Nakboda Muda": "Nakhoda Muda",
+        "Nyanyi.Nyanyian": "Nyanyi-Nyanyian",
+        "Pengajaran di at as Bukit": "Pengajaran di atas Bukit",
+        "Perang ZaituD": "Perang Zaitun",
+        "Petita Menyurat": "Pelita Menyurat",
+        "Puji.Pujian": "Puji-Pujian",
+        "Puji.Pujian Methodist": "Puji-Pujian Methodist",
+        "Romanised MaJay Spelling": "Romanised Malay Spelling",
+        "Sabar AIi": "Sabar Ali",
+        "Sanbe Baojian": "Sanhe Baojian",
+        "Sejarab Melayu": "Sejarah Melayu",
+        "Sejarab Terengganu": "Sejarah Terengganu",
+        "Sullam al·Mubtadi": "Sullam al-Mubtadi",
+        "Surat (al-)Kitab a,": "Surat al-Kitab",
+        "Syair l ... ]": "Syair [ ... ]",
+        "Tangga Pengetabuan": "Tangga Pengetahuan",
+        "Umm al-Burban": "Umm al-Burhan",
+        "Umm al-Madbabib": "Umm al-Madhahib",
+        "Undang-Undang Cabaya": "Undang-Undang Cahaya",
+        "Undang-Undang Metbodist": "Undang-Undang Methodist",
+        "Yatim Mustafa": "Yalim Mustafa",
+        "Vue Fei": "Yue Fei",
+        "Silam Bari": "Šilam Bari",
+    })
 
-    title_loc_df.loc[title_loc_df.query("short_title_desc == 'Sirat al-Mustakim'").index, "entry_start"] = 41676 - 1  # Fix an entry starting two lines late due to bad title OCR
-    title_loc_df.loc[title_loc_df.query("short_title_desc == 'Slraj aI-KalbI'").index, "entry_end"] = 41675 - 1
+    title_loc_df.loc["Abraham", "entry_end"] = 1103
+    title_loc_df.loc["Abu Nawas", "entry_start"] = 1104  # Fix entry starting late due to bad title OCR
 
-    title_loc_df.loc[title_loc_df.query("short_title_desc == 'Akhbar'").index, "entry_end"] = 2520 - 64
-    title_loc_df.loc[title_loc_df.query("short_title_desc == 'Akidat al-Munjian'").index, "entry_start"] = 2521 - 64  # Fix an entry starting late due to bad title OCR
-    title_loc_df.loc[title_loc_df.query("short_title_desc == 'Akidat al-Munjian'").index, "entry_end"] = 2540 + 1  # Fix an entry starting late due to bad title OCR
-    title_loc_df.loc[title_loc_df.query("short_title_desc == 'Alauddln'").index, "entry_start"] = 2541 + 1
+    title_loc_df.loc["Akhbar", "entry_end"] = 2520 - 64
+    title_loc_df.loc["Akidat al-Munajjin", "entry_start"] = 2521 - 64  # Fix entry starting late due to bad title OCR
+    title_loc_df.loc["Akidat al-Munajjin", "entry_end"] = 2540 + 1  # Fix entry starting late due to bad title OCR
+    title_loc_df.loc["Alauddin", "entry_start"] = 2541 + 1
 
-    title_loc_df.loc[946, "entry_end"] = 51208  # Manually correct end of final entry
+    title_loc_df.loc["Bidayat al-Mubtadi", "entry_end"] = 9318  # Fix entry starting late due to bad title OCR
+    title_loc_df.loc["Bidayat al-Salikin", "entry_start"] = 9319  # Fix entry starting late due to bad title OCR
 
-    title_loc_df["entry_text"] = title_loc_df.apply(lambda x: "\n".join(description_lines[x["entry_start"]: x["entry_end"] + 1]), axis=1)
+    title_loc_df.loc["Fakih Sunda", "entry_end"] = 14376
+    title_loc_df.loc["Fan Tang", "entry_start"] = 14377  # Fix entry starting late due to bad OCR
+
+    title_loc_df.loc["Harapan", "entry_end"] = 16667
+    title_loc_df.loc["Haris Fadhillah", "entry_start"] = 16668
+
+    title_loc_df.loc["Hasan Masri", "entry_end"] = 17010
+    title_loc_df.loc["Hayat al-Hayawan", "entry_start"] = 17011
+
+    title_loc_df.loc["Ilmu Bintang", "entry_end"] = 18277 - 2
+    title_loc_df.loc["Ilmu Falak", "entry_start"] = 18278 - 2  # Fix entry starting two lines late due to bad title OCR
+
+    title_loc_df.loc["Jalan Kepandaian", "entry_start"] = 20027 - 3  # Fix entry starting three lines late due to bad title OCR
+
+    title_loc_df.loc["Kisah-Kisah Kitab Injil", "entry_end"] = 23564  # Fix entry ending early due to next title reading order error
+
+    title_loc_df.loc["Makna Melayu Dalail", "entry_end"] = 25392
+    title_loc_df.loc["Makrifat al-Salat", "entry_start"] = 25393
+    title_loc_df.loc["Makrifat al-Salat", "entry_end"] = 25432
+    title_loc_df.loc["Malai Zaban", "entry_start"] = 25433
+
+    title_loc_df.loc["Miskin Marakarmah", "entry_end"] = 27659
+    title_loc_df.loc["Muhammad Hanafiah", "entry_start"] = 27660
+
+    title_loc_df.loc["Pelajaran Bahasa Arab", "entry_end"] = 30966
+    title_loc_df.loc["Pelajaran Bahasa Melayu (No.1)", "entry_start"] = 30967  # Fix entry thrown by being very similar to next entry (Pelajaran ... (No.2))
+    title_loc_df.loc["Pelajaran Bahasa Melayu (No.1)", "entry_end"] = 31193
+
+    title_loc_df.loc["Scripture Tickets", "entry_end"] = 39940  # Fix entry starting late due to bad title OCR
+    title_loc_df.loc["Sejarah Melayu", "entry_start"] = 39941  # Fix entry starting late due to bad title OCR
+
+    title_loc_df.loc["Sidapati", "entry_end"] = 40925
+    title_loc_df.loc["Sifat Duapuluh", "entry_start"] = 40926
+    title_loc_df.loc["Sifat Duapuluh", "entry_end"] = 41149
+
+    title_loc_df.loc["Sirat al-Mustakim", "entry_start"] = 41676 - 1  # Fix entry starting two lines late due to bad title OCR
+    title_loc_df.loc["Siraj al-Kalbi", "entry_end"] = 41675 - 1
+
+    title_loc_df.loc["Zubaidah", "entry_end"] = 51208  # Manually correct end of final entry
+
+    title_loc_df["entry_text"] = title_loc_df.apply(lambda x: "\n".join(desc_lines[x["entry_start"]: x["entry_end"] + 1]), axis=1)
+
+    title_loc_df.loc["Bible: Matthew", "entry_text"] = title_loc_df.loc["Bible: Matthew", "entry_text"].replace("~4620.a.30", "14620.a.30")
+    title_loc_df.loc["Bidasari", "entry_text"] = title_loc_df.loc["Bidasari", "entry_text"].replace("14653.bA", "14653.b.4")
+    title_loc_df.loc["Cakrawala", "entry_text"] = title_loc_df.loc["Cakrawala", "entry_text"].replace("14620.d. I 7(6)", "14620.d.17(6)")
+    title_loc_df.loc["Dictionary: Wilkinson", "entry_text"] = title_loc_df.loc["Dictionary: Wilkinson", "entry_text"].replace("15012'[a.l", "15012.fa.1")
+    title_loc_df.loc["Gemala Hikmat", "entry_text"] = title_loc_df.loc["Gemala Hikmat", "entry_text"].replace("14653.dAO", "14653.d.40")
+    title_loc_df.loc["Hang Tuah", "entry_text"] = title_loc_df.loc["Hang Tuah", "entry_text"].replace("14653.dA3(1)", "14653.d.43(1)")
+    title_loc_df.loc["Ibrahim dan Isaak", "entry_text"] = title_loc_df.loc["Ibrahim dan Isaak", "entry_text"].replace("14620.aI9(10)", "14620.a.19(10)")
+    title_loc_df.loc["Kapal Asap", "entry_text"] = title_loc_df.loc["Kapal Asap", "entry_text"].replace("14620.b.18{l0)", "14620.b.18(10)")
+    title_loc_df.loc["Kelakuan Orang", "entry_text"] = title_loc_df.loc["Kelakuan Orang", "entry_text"].replace("14620.h.18(5)", "14620.b.18(5)")
+    title_loc_df.loc["Kelakuan Orang", "entry_text"] = title_loc_df.loc["Kelakuan Orang", "entry_text"].replace("14654.h.22", "14654.b.22")
+    title_loc_df.loc["Makan Sirih", "entry_text"] = title_loc_df.loc["Makan Sirih", "entry_text"].replace("14654.b.59(2(3 ", "14654.b.59(2(3))")
+    title_loc_df.loc["Mazlan", "entry_text"] = title_loc_df.loc["Mazlan", "entry_text"].replace("14625.eA", "14625.e.4")
+    title_loc_df.loc["Mukhtasar Takbir", "entry_text"] = title_loc_df.loc["Mukhtasar Takbir", "entry_text"].replace("14623.cA", "14623.c.4")
+    title_loc_df.loc["Orang yang Cari Selamat", "entry_text"] = title_loc_df.loc["Orang yang Cari Selamat", "entry_text"].replace("I4653.d.28 ", "14653.d.28")
+    title_loc_df.loc["Pelayaran Abdullah", "entry_text"] = title_loc_df.loc["Pelayaran Abdullah", "entry_text"].replace("14628.c.1 (2)*", "14628.c.1(2)*")
+    title_loc_df.loc["Puji-Pujian", "entry_text"] = title_loc_df.loc["Puji-Pujian", "entry_text"].replace("14620.h.14(7)", "14620.b.14(7)").replace("14620.h.24", "14620.b.24")
+    title_loc_df.loc["Pungguk", "entry_text"] = title_loc_df.loc["Pungguk", "entry_text"].replace("14626.d.l1 (8)", "14626.d.11(8)")
+    title_loc_df.loc["Salasilah Kedah", "entry_text"] = title_loc_df.loc["Salasilah Kedah", "entry_text"].replace("14624.d2", "14624.d.2")
+    title_loc_df.loc["San Guo", "entry_text"] = title_loc_df.loc["San Guo", "entry_text"].replace("14625.a9", "14625.a.9")
+    title_loc_df.loc["Sifat Duapuluh", "entry_text"] = title_loc_df.loc["Sifat Duapuluh", "entry_text"].replace("14620.g.20(-)", "14620.g.20(0)")
+    title_loc_df.loc["Sungging", "entry_text"] = title_loc_df.loc["Sungging", "entry_text"].replace("14626.eA", "14626.e.4")
+    title_loc_df.loc["Tembakau", "entry_text"] = title_loc_df.loc["Tembakau", "entry_text"].replace("14654.b.59(2(1", "14654.b.59(2(1))")
+    title_loc_df.loc["Tract: Bugis", "entry_text"] = title_loc_df.loc["Tract: Bugis", "entry_text"].replace("1463303.38", "14633.a.38")
+    title_loc_df.loc["Undang-Undang Kapal", "entry_text"] = title_loc_df.loc["Undang-Undang Kapal", "entry_text"].replace("14622.1:.15", "14622.b.15")
 
     return title_loc_df
+
+
+def gen_prompt(entry_text: str, book_title: str) -> str:
+    """
+    Apply the info in a manual check csv for whether short titles mappings are correct to the titles df
+    Check the integrity of the manual check csv
+    Apply the manually checked lines to the titles df
+    Apply a series of manual corrections for entry start/end points
+    Extract entry text to new column
+    
+    :param entry_text: new line escaped text of an entry from the Descriptions section
+    :type entry_text str
+    :param book_title: The title of the work
+    :type book_title: str
+    :rtype: str
+    """
+    json_schema = {
+        "$schema": "http://json-schema.org/draft-04/schema#",
+        "type": "object",
+        "properties": {
+            "editions": {
+            "type": "array",
+            "items": [
+                {
+                "type": "object",
+                "properties": {
+                    "edition_name": {
+                    "type": "string"
+                    },
+                    "title": {
+                    "type": "string"
+                    },
+                    "author": {
+                    "type": "string"
+                    },
+                    "editor": {
+                    "type": "string"
+                    },
+                    "translator": {
+                    "type": "string"
+                    },
+                    "assistant_translator": {
+                    "type": "string"
+                    },
+                    "proprietor": {
+                    "type": "string"
+                    },
+                    "publisher": {
+                    "type": "string"
+                    },
+                    "printer": {
+                    "type": "string"
+                    },
+                    "copyist": {
+                    "type": "string"
+                    },
+                    "contents": {
+                    "type": "string"
+                    },
+                    "place_of_publication": {
+                    "type": "string"
+                    },
+                    "printing_medium": {
+                    "type": "string"
+                    },
+                    "script": {
+                    "type": "string"
+                    },
+                    "dimensions": {
+                    "type": "string"
+                    },
+                    "extent": {
+                    "type": "string"
+                    },
+                    "Notes": {
+                    "type": "string"
+                    },
+                    "References": {
+                    "type": "string"
+                    },
+                    "Location": {
+                    "type": "string"
+                    },
+                    "unclassified_text": {
+                    "type": "string"
+                    }
+                },
+                "required": [
+                    "edition_name",
+                    "title",
+                    "author",
+                    "editor",
+                    "translator",
+                    "assistant_translator",
+                    "proprietor",
+                    "publisher",
+                    "printer",
+                    "copyist",
+                    "contents",
+                    "place_of_publication",
+                    "printing_medium",
+                    "script",
+                    "dimensions",
+                    "extent",
+                    "Notes",
+                    "References",
+                    "Location",
+                    "unclassified_text"
+                ]
+                }
+            ]
+            }
+        },
+        "required": [
+            "editions"
+        ]
+    }
+
+    prompt = f"""Please extract structured metadata from the following text. The text is an entry for a particular book from a catalogue of books printed before 1925 in Malaysia.
+    The text has been extracted from a pdf using optical character recognition and may contain errors. Do not correct these errors, but attempt to understand the correct words when extracting information.
+    The text is split using line breaks. These separate lines in the OCR, but extra, unnecessary line breaks have sometimes been added between text from the same line.
+    Each book entry begins with the book title, then is split into one or more editions. Each edition starts with an edition name in one of three formats:
+    1) A year
+    2) A year followed by a full stop then a letter (if there are multiple editions for one year)
+    3) A letter (if the date of publication is unknown)
+
+    The text for each edition normally reprints the edition date within it. The text for each edition contains different fields you should extract.
+    These fields are marked by the field heading, and fields may run over multiple lines. All text before the next field heading belongs to that field. Not every entry has every field.
+    Field headings are case insensitive. The Reference and Location fields are not usually followed by a colon. The other fields are followed by a colon.
+    Sometimes fields are combined, such as 'author & proprietor', or 'publisher & printer'. In these cases repeat the information in text in the author and proprietor fields of the output.
+    Field headings are:
+    - author
+    - editor
+    - translator
+    - assistant translator
+    - proprietor
+    - publisher
+    - printer
+    - copyist
+    - contents
+    - Notes
+    - Reference(s)
+    - Location(s)
+
+    There is text between the edition name and the first field. There may also be text between fields that does not belong to that field. Both these types of text should be treated together as follows.
+    This text may contain a title, a place of publication, the date of publication, the printing medium, the script of the text, the number of pages, the number of volumes, the dimensions of the edition.
+    If the title is missing use the title provided later on in this prompt, otherwise use the title from the text. Use this text to extract the following fields:
+    - title
+    - place_of_publication
+    - printing_medium
+    - script
+    - dimensions
+    - extent (the number of volumes and number of pages) 
+    
+    The extent is number of pages, or if there are multiple volumes, then the number of volumes, sometimes called books, and the number of pages for each volume.
+    If there are multiple volumes report the extent as '<XX> volumes; <YY> pages' where <XX> is the the total number of volumes for the work and <YY> is the total number of pages summed over all the volumes.
+
+    The script of the text is the script the book itself is written in. If the word 'Jawi' is mentioned in the text return 'In Jawi script' for the script. Otherwise return <empty>.
+
+    The printing_medium is how the text was printed. If the words 'lithographed' or 'lithographed jawi' are mentioned in the text return 'lithographed', otherwise return <empty>. 
+    If the text contains 'lithographed illustrations' also return <empty>.
+
+    Please extract the following information in json format. Only use the fields listed below. Not every entry has every field. If a field is missing represent it as <empty> in the output json.
+    - edition name
+    - title
+    - author
+    - editor
+    - translator
+    - assistant translator
+    - publisher
+    - printer
+    - copyist
+    - contents
+    - place_of_publication
+    - printing_medium
+    - script
+    - dimensions
+    - extent (the number of volumes and number of pages) 
+    - notes
+    - references
+    - locations
+    - unclassified_text
+    Any text not included in other fields include in the output json in the final 'unclassified_text' field
+        
+    Please format the output as valid json using the schema below. Make sure to provide a valid and well-formatted JSON adhering to the given schema. Do not make up any information, only use what is provided in the text.
+    {json_schema}    
+
+    First, split the text into editions using the edition names, then assign the text for each edition to the appropriate fields.
+    The title of this book is: {book_title}
+    
+    Book entry text:
+    {entry_text}
+    """
+    # TODO refactor to include target edition in the output
+    return prompt
+
+
+async def structure_entry_text(client: AsyncOpenAI, prompt: str, book_title:str, semaphore: asyncio.Semaphore, model: str, logger: logging.Logger):
+    async with semaphore:
+        logger.info(f"Prompt token count: {len(prompt.split(" "))}")
+        messages = [{"role": "user", "content": prompt}]
+        retries = 0
+        while retries < 3:
+            try: 
+                completion = await asyncio.wait_for(
+                    client.chat.completions.create( # type: ignore
+                        model=model,
+                        messages=messages,
+                        stream=False,
+                        extra_body={"enable_thinking": "false"}
+                    ), 
+                    timeout=360
+                )
+                output = completion
+                break
+            except asyncio.TimeoutError:
+                print(f"<retry {retries + 1}> API timeout for entry {book_title}")
+                logging.error(f"<retry {retries + 1}> API timeout for entry {book_title}")
+                retries += 1
+            except Exception as e:
+                print(f"\n<retry {retries + 1}> Error processing entry {book_title}: {e}")
+                logging.error(f"\n<retry {retries + 1}> Error processing entry {book_title}: {e}")
+                retries += 1
+        else:
+            return None
+
+        return (book_title, output)
+
+async def structure_all_entries(
+    base_url:str,
+    entries: dict[str, str],
+    max_concurrent=3, model:str="qwen3-235b-a22b-thinking-2507",
+    logger: logging.Logger=logging.getLogger(__name__),
+    batch="default_batch"
+    ):
+    """Structure all entries concurrently with a limit on concurrent requests"""
+    # Create aiohttp session for connection pooling
+    connector = aiohttp.TCPConnector(limit=10, limit_per_host=5)
+    timeout = aiohttp.ClientTimeout(total=600)  # 10 minute total timeout
+
+    client = AsyncOpenAI(
+        api_key=os.environ["DASHSCOPE_API_KEY"],
+        base_url=base_url,
+    )
+
+    async with aiohttp.ClientSession(connector=connector, timeout=timeout) as session:
+        semaphore = asyncio.Semaphore(max_concurrent)
+
+        # Create tasks for all images
+        tasks = [structure_entry_text(client, prompt, book_title, semaphore, model, logger) for book_title, prompt in entries.items()]
+
+        # Process with progress bar
+        results = []
+        completed_count = 0
+
+        for task in tqdm.as_completed(tasks, total=len(tasks), desc="Processing entries"):
+            try:
+                result = await task
+                completed_count += 1
+                if result is not None:
+                    results.append(result)
+                    async with aiofiles.open(f"data/processed/batch_{batch}/{result[0].lower().replace(" ", "_").replace(":", "_")}.txt", "w") as f:
+                        logging.info(f"Output token count: {len(result[1].choices[0].message.content.split(" "))}")
+                        await f.write(result[1].choices[0].message.content.strip("```").strip("json"))
+            except Exception as e:
+                print(f"Task failed with error: {e}")
+                completed_count += 1
+
+    return results
+
+
+def log_api_call(prompt, output):
+    pass
+
+
+def extract_bl_shelfmark(locations_str: str) -> list[str|None]:
+    """
+    Extract a BL shelfmark from a string containing the location of a work
+    Return empty string if no BL shelfmarks present
+    
+    :param locations_str: Qwen extracted text containing holdings locations of a work
+    :type locations_str: str
+    """
+    # These 4 patterns match all 686 
+    three_part_re = re.compile(r"([o° 0-9lI]+[\.,])([a-z13]+[\.,])([ 0-9lIOS(),*]+)")
+    jav_re = re.compile(r"Jav\. ?[\d()]+")
+    
+    orb_re = re.compile(r"ORB\. ?[0-9]+/[0-9]+")
+    siam_re = re.compile(r"Siam \d+")
+
+    locations = locations_str.split(";")
+    bl_locs = [loc for loc in locations if ("BL" in loc or "OIOC" in loc or"IOLR" in loc)]
+    if not bl_locs:
+        return []
+
+    shelfmarks = []
+    for loc in bl_locs:
+        grp = three_part_re.search(loc)
+        if grp:
+            p1, p2, p3 = grp.groups()
+            if "l" in p1:
+                p1 = p1.replace("l", "1")
+            if "I" in p1:
+                p1 = p1.replace("I", "1")
+            
+            if "1" in p2:
+                p2 = p2.replace("1", "l")
+            
+            if "l" in p3:
+                p3 = p3.replace("l", "1")
+            if "I" in p3:
+                p3 = p3.replace("I", "1")
+            if "O" in p3:
+                p3 = p3.replace("O", "0")
+            if "S" in p3:
+                p3 = p3.replace("S", "5")
+            
+
+            shelfmarks.append(p1.strip() + p2 + p3.strip())
+
+        grp = jav_re.search(loc)
+        if grp:
+            # TODO convert Jav. XX to Jav.XX (how listed in ATG's docs)
+            sm = grp.group().replace(" ", "")
+            shelfmarks.append(sm)
+        
+        grp = orb_re.search(loc)
+        if grp:
+            # TODO convert ORB. XX to ORB.XX (how listed in ATG's docs)
+            sm = grp.group().replace(" ", "")
+            shelfmarks.append(sm)
+        
+        grp = siam_re.search(loc)
+        if grp:
+            sm = grp.group()
+            shelfmarks.append(sm)
+
+    return shelfmarks
+        
+
+def process_output_to_csv(json_dict: dict[str, str | dict[str, list[dict[str, str]]]]) -> pd.DataFrame:
+    """
+    Process Qwen JSON outputs to csv
+    
+    :param json_list: Description
+    :type json_list: list[dict[str, str]]
+    """
+    metadata_lines = []
+    for short_title, json in json_dict.items():
+        if json == "JSON DECODE FAILURE":
+            metadata_lines.append(pd.DataFrame({"short_title": short_title, "edition": "JSON LOAD ERROR"}))
+            continue
+        if "editions" not in json:
+            json["editions"] = json["properties"]["editions"]  # ty:ignore[invalid-argument-type, invalid-assignment]
+
+        if "items" in json["editions"]:  # ty:ignore[invalid-argument-type]
+            json["editions"] = json["editions"]["items"]  # ty:ignore[invalid-argument-type, invalid-assignment]
+
+        for e in json["editions"]:  # ty:ignore[invalid-argument-type]
+            ed = e["edition_name"]
+            # known OCR errors
+            ed = ed.replace("t", "†").replace(" .•", ".a").replace("IS", "18")
+            shelfmarks = extract_bl_shelfmark(e["Location"])
+
+            date = ed.split(".")[0]
+            method_of_acquisition = ""
+            date_of_publication_in_arabic_or_roman_numerals = ""
+            date_1, date_2 = "", ""
+            pub_date_type = "s"
+            if "-" in date:
+                date_1, date_2 = date.split("-")
+                if len(date_2) == 2:
+                    date_2 = date_1[:2] + date_2
+                pub_date_type = "m"
+                try:
+                    date = int(date_1)
+                    date_of_publication_in_arabic_or_roman_numerals = date_1
+                    if date <= 1886:
+                        method_of_acquisition = "purchased"
+                    elif date >= 1887:
+                        method_of_acquisition = "legal deposit"
+                except ValueError:
+                    pass
+            else:
+                try:
+                    date = int(date)
+                    date_1 = str(date)
+                    date_of_publication_in_arabic_or_roman_numerals = date_1
+                    if date <= 1886:
+                        method_of_acquisition = "purchased"
+                    elif date >= 1887:
+                        method_of_acquisition = "legal deposit"
+                except ValueError:
+                    pass
+
+            name = e["author"]
+            extracted_title = e["title"]
+            if extracted_title == "<empty>":
+                extracted_title = short_title.replace("_", " ").title()
+            place_of_publication = e["place_of_publication"]
+            publisher = e["publisher"]
+            extent = e["extent"]
+            dimensions = e["dimensions"]
+            language_note = e["script"]
+            general_notes = e["printing_medium"]
+            citation_ref_note = f"Proudfoot 1993: {short_title} {ed}"
+            unclassified_text = e.get("unclassified_text", "")
+
+            metadata_template = pd.DataFrame(
+                data={
+                    "short_title": short_title,
+                    "edition": ed,
+                    "shelfmark": None,
+                    "type_of_pub_date": pub_date_type,
+                    "date_1": date_1,
+                    "date_2": date_2,
+                    "language_note": language_note,
+                    "name": name,
+                    "title": extracted_title,
+                    "place_of_publication": place_of_publication,
+                    "publisher": publisher,
+                    "date_of_publication_in_arabic_or_roman_numerals": date_of_publication_in_arabic_or_roman_numerals,
+                    "extent": extent,
+                    "dimensions": dimensions,
+                    "general_notes": general_notes,
+                    "citation_ref_note": citation_ref_note,
+                    "method_of_acquisition": method_of_acquisition,
+                    "unclassified_text": unclassified_text
+                },
+                index = [0]  # ty:ignore[invalid-argument-type]
+            )
+
+            if not shelfmarks:
+                metadata_df = metadata_template.copy()
+                metadata_lines.append(metadata_df)
+            else:
+                for sm in shelfmarks:
+                    metadata_df = metadata_template.copy()
+                    metadata_df.loc[0, "shelfmark"] = sm
+                    metadata_lines.append(metadata_df)
+    
+    return pd.concat(metadata_lines).set_index(["short_title", "edition"], drop=True)
+
+
+def map_orb_sm(series: pd.Series) -> pd.Series:
+
+    map = {
+        'ORB. 30/445 ': 'ORB. 30/445 (IOLR Malay F6 306/36.GF.7)',
+        'ORB. 30/446 ': 'ORB. 30/446 (IOLR Malay F6 306/36.G.8)',
+        'ORB. 30/447 ': 'ORB. 30/447 (IOLR Malay F6 306/36.G.15)',
+        'ORB. 30/448 ': 'ORB. 30/448 (IOLR Malay F6 306/36.G.16)',
+        'ORB. 30/451 ': 'ORB. 30/451 (IOLR Malay B 306/36.F.29)',
+        'ORB. 30/452 ': 'ORB. 30/452 (IOLR Malay B 306/36.F.40)',
+        'ORB. 30/453 ': 'ORB. 30/453 (IOLR Malay 306/36.H.9)',
+        'ORB. 30/457 ': 'ORB. 30/457 (IOLR Malay B 306/36.F. 16)',
+        'ORB. 30/585': 'ORB. 30/585',
+        'ORB. 30/611': 'ORB. 30/611',
+        'ORB. 30/612': 'ORB. 30/612',
+        'ORB.30/5553': 'ORB.30/5553',
+        'ORB. 50/13': 'ORB. 50/13'
+    }
+    
+    mapped_series = series.replace(map)
+
+    return mapped_series
+
+
+def post_process_extent(s: str) -> str:
+    if "pp" in s[:10]:
+        return s.split("pp")[0].replace("l", "1").replace("I", "1") + " pages"
+    else:
+        return s
+
+
+def post_process_dimensions(s: str) -> str:
+    height_str = s.split("x")[0]
+    height_str = height_str.split(" pages")[0]
+    height_str = height_str.replace("on ", "")
+    try:
+        height = ceil(float(height_str))
+        return str(height) + " cm"
+    except ValueError:
+
+        return height_str.split(" pages")[0]
+
+
+# TODO make title case
+def post_process_notes(s: str) -> str|int:
+    if "lithographed" in s:
+        return s
+    else:
+        return ""
+    
+
+def post_process_csv(metadata_df: pd.DataFrame, header_template: pd.DataFrame) -> pd.DataFrame:
+    """
+    Apply BL cataloguing standards in post-processing steps to metadata df
+    
+    :param metadata_df: Minimally modified Qwen output mapped onto target metadata fields
+    :type metadata_df: pd.DataFrame
+    :return: A dataframe aligned as closely as possible with BL/RDA cataloguing standards
+    :rtype: DataFrame
+    """
+    header_template.set_index(pd.MultiIndex.from_arrays([(0,0), (0,1)], names=["short_title", "edition"]), inplace=True)
+
+    marc_df = metadata_df.copy()
+    marc_df.replace("<empty>", "", inplace=True)
+    marc_df["shelfmark"] = map_orb_sm(marc_df["shelfmark"])
+    marc_df["country_of_publication"] = "si"
+    marc_df["index"] = 0
+    marc_df["main_language"] = "may"
+    # TODO add Jawi check to Qwen prompt
+    marc_df["type_of_name"] = "Personal name - surname first"
+    marc_df["name"] = marc_df["name"].str.strip("[]").str.split(" :").apply(lambda x: x[0])
+    marc_df["relationship_to_resource"] = "author"
+    marc_df["title"] = marc_df["title"].str.replace('"', '')
+    marc_df["title_ind2"] = 0
+    marc_df["extent"] = marc_df["extent"].apply(lambda x: post_process_extent(x))
+    marc_df["dimensions"] = marc_df["dimensions"].apply(lambda x: post_process_dimensions(x))
+    marc_df["main_content"] = "text"
+    marc_df["carrier_type"] = "volume"
+    marc_df["general_notes"] = marc_df["general_notes"].apply(lambda x: post_process_notes(x))
+    
+    marc_df.rename(columns={
+        'shelfmark': 'Shelfmark',
+        'type_of_pub_date': 'Type of publication date',
+        'date_1': 'Date 1',
+        'date_2': 'Date 2',
+        'language_note': 'Language note',
+        'name': 'Name',
+        'title': 'Title',
+        'place_of_publication': 'Place of publication',
+        'publisher': 'Publisher',
+        'date_of_publication_in_arabic_or_roman_numerals': 'Date of publication in Arabic or Roman numerals',
+        'extent': 'Extent',
+        'dimensions': 'Dimensions',
+        'general_notes': 'General notes',
+        'citation_ref_note': 'Citation/references note',
+        'method_of_acquisition': 'Method of acquisition',
+        'unclassified_text': 'unclassified_text',
+        'type_of_publication_date': 'Type of publication date',
+        'country_of_publication': 'Country of publication',
+        'index': 'Index',
+        'main_language': 'Main language',
+        'type_of_name': 'Type of name',
+        'relationship_to_resource': 'Relationship to resource',
+        'title_ind2': ' ',
+        'date_of_publication': 'Date of publication',
+        'main_content': 'Main content type',
+        'carrier_type': 'Carrier type'
+    }, inplace=True)
+    
+    return pd.concat([header_template, marc_df])
+
+
+def create_title_loc_df() -> pd.DataFrame:
+    """Apply all raw data processing steps to create a dataframe of titles and title entries
+
+    Returns:
+        title_loc_df: pd.DataFrame - DataFrame of all titles and locations extracted from Proudfoot
+    """
+    text = parse_proudfoot(os.path.join(DATA_DIR, "raw/emp.pdf"))
+    preproc_text = preprocess_text(text)
+    all_titles_raw = gen_title_lines(preproc_text)
+    all_titles = manual_merge(all_titles=all_titles_raw, merge_file=os.path.join(DATA_DIR, "interim/lines_to_concatenate_with_text.txt"))
+    works_df = select_works(all_titles)
+    works_df = gen_short_titles(works_df, shorten_proudfoot_title)
+    works_df.to_csv(os.path.join(DATA_DIR, "interim/works.csv"), encoding="utf-8-sig", index=False)
+
+    desc_lines, _ = gen_desc_lines(preproc_text)
+    title_loc_df = gen_title_loc_df(works_df=works_df["short_title_titles"], desc_lines=desc_lines)
+    title_loc_df = apply_find_nearest(title_loc_df, desc_lines)
+
+    manual_check_df = pd.read_csv(
+        os.path.join(DATA_DIR, "interim/missing_title_adjacent_manual_check.csv"),
+        encoding="utf-8-sig",
+        index_col=1
+    )
+    title_loc_df = extract_clean_entries(manual_check_df, title_loc_df, desc_lines)
+    return title_loc_df
+
+
+if __name__ == "__main__":
+    title_loc_df = create_title_loc_df()
+    title_loc_df.to_csv(os.path.join(DATA_DIR, "interim/title_loc.csv"), encoding="utf-8-sig")

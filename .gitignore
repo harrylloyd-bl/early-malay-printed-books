@@ -2,8 +2,8 @@
 /data/
 
 # Raw model prompts
-/models/prompts_outputs/gt_prompts/
-/models/prompts_outputs/non_gt_prompts/
+/models/prompts/gt_prompts/
+/models/prompts/non_gt_prompts/
 
 # Mac OS-specific storage files
 .DS_Store

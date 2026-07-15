@@ -30,18 +30,18 @@ def post_process_outputs(text_outputs, name_mapping, csv_out):
     marc_df.to_excel(csv_out.replace(".csv", ".xlsx"))
 
 
-if __name__ == "__main__":
+def main():
     logger = logging.getLogger(__name__)
     logging.basicConfig(filename=f"logs/{datetime.now().strftime("%Y%m%d_%H%M")}_main.log", encoding="utf8", level=logging.DEBUG)
 
-    CREATE_TITLE_LOC_DF = False
+    CREATE_TITLE_LOC_DF = True
 
     USE_DEFAULT_WORKSPACE = True
     CALL_API = False
     CREATE_PROMPTS = False
     CREATE_JSON = False
     
-    POST_PROCESS = True
+    POST_PROCESS = False
 
     BATCH = "260710"
     MODEL = "qwen3.7-plus-2026-05-26"
@@ -93,3 +93,7 @@ if __name__ == "__main__":
     if POST_PROCESS:
         post_process_outputs(text_outputs=os.path.join(DATA_DIR, f"processed/batch_{BATCH}/*.txt"), name_mapping=name_mapping,csv_out=os.path.join(DATA_DIR, f"processed/batch_{BATCH}/{BATCH}_postproc.csv"))
     print("")
+
+
+if __name__ == "__main__":
+    main()

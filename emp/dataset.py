@@ -624,7 +624,7 @@ def extract_clean_entries(manual_check_df: pd.DataFrame, title_loc_df: pd.DataFr
     title_loc_df.loc["Bidayat al-Mubtadi", "entry_end"] = 9318  # Fix entry starting late due to bad title OCR
     title_loc_df.loc["Bidayat al-Salikin", "entry_start"] = 9319  # Fix entry starting late due to bad title OCR
 
-    title_loc_df.loc["Fakih Sunda", "entry_start"] = 14376
+    title_loc_df.loc["Fakih Sunda", "entry_end"] = 14376
     title_loc_df.loc["Fan Tang", "entry_start"] = 14377  # Fix entry starting late due to bad OCR
 
     title_loc_df.loc["Harapan", "entry_end"] = 16667
@@ -633,8 +633,8 @@ def extract_clean_entries(manual_check_df: pd.DataFrame, title_loc_df: pd.DataFr
     title_loc_df.loc["Hasan Masri", "entry_end"] = 17010
     title_loc_df.loc["Hayat al-Hayawan", "entry_start"] = 17011
 
-    title_loc_df.loc["Ilmu Falak", "entry_start"] = 18278 - 2  # Fix entry starting two lines late due to bad title OCR
     title_loc_df.loc["Ilmu Bintang", "entry_end"] = 18277 - 2
+    title_loc_df.loc["Ilmu Falak", "entry_start"] = 18278 - 2  # Fix entry starting two lines late due to bad title OCR
 
     title_loc_df.loc["Jalan Kepandaian", "entry_start"] = 20027 - 3  # Fix entry starting three lines late due to bad title OCR
 
@@ -644,6 +644,9 @@ def extract_clean_entries(manual_check_df: pd.DataFrame, title_loc_df: pd.DataFr
     title_loc_df.loc["Makrifat al-Salat", "entry_start"] = 25393
     title_loc_df.loc["Makrifat al-Salat", "entry_end"] = 25432
     title_loc_df.loc["Malai Zaban", "entry_start"] = 25433
+
+    title_loc_df.loc["Miskin Marakarmah", "entry_end"] = 27659
+    title_loc_df.loc["Muhammad Hanafiah", "entry_start"] = 27660
 
     title_loc_df.loc["Pelajaran Bahasa Arab", "entry_end"] = 30966
     title_loc_df.loc["Pelajaran Bahasa Melayu (No.1)", "entry_start"] = 30967  # Fix entry thrown by being very similar to next entry (Pelajaran ... (No.2))
@@ -964,7 +967,7 @@ def log_api_call(prompt, output):
     pass
 
 
-def extract_bl_shelfmark(locations_str: str) -> str:
+def extract_bl_shelfmark(locations_str: str) -> list[str|None]:
     """
     Extract a BL shelfmark from a string containing the location of a work
     Return empty string if no BL shelfmarks present
@@ -973,58 +976,60 @@ def extract_bl_shelfmark(locations_str: str) -> str:
     :type locations_str: str
     """
     # These 4 patterns match all 686 
-    three_part_re = re.compile(r"([o° 0-9lI]+[\.,])([a-z13]+[\.,])([ 0-9lIOS()]+)")
+    three_part_re = re.compile(r"([o° 0-9lI]+[\.,])([a-z13]+[\.,])([ 0-9lIOS(),*]+)")
     jav_re = re.compile(r"Jav\. ?[\d()]+")
     
     orb_re = re.compile(r"ORB\. ?[0-9]+/[0-9]+")
     siam_re = re.compile(r"Siam \d+")
 
     locations = locations_str.split(";")
-    bl_loc = [loc for loc in locations if "BL" in loc]
-    if not bl_loc:
-        return ""
+    bl_locs = [loc for loc in locations if ("BL" in loc or "OIOC" in loc or"IOLR" in loc)]
+    if not bl_locs:
+        return []
 
-    grp = three_part_re.search(bl_loc[0])
-    if grp:
-        p1, p2, p3 = grp.groups()
-        if "l" in p1:
-            p1 = p1.replace("l", "1")
-        if "I" in p1:
-            p1 = p1.replace("I", "1")
+    shelfmarks = []
+    for loc in bl_locs:
+        grp = three_part_re.search(loc)
+        if grp:
+            p1, p2, p3 = grp.groups()
+            if "l" in p1:
+                p1 = p1.replace("l", "1")
+            if "I" in p1:
+                p1 = p1.replace("I", "1")
+            
+            if "1" in p2:
+                p2 = p2.replace("1", "l")
+            
+            if "l" in p3:
+                p3 = p3.replace("l", "1")
+            if "I" in p3:
+                p3 = p3.replace("I", "1")
+            if "O" in p3:
+                p3 = p3.replace("O", "0")
+            if "S" in p3:
+                p3 = p3.replace("S", "5")
+            
+
+            shelfmarks.append(p1.strip() + p2 + p3.strip())
+
+        grp = jav_re.search(loc)
+        if grp:
+            # TODO convert Jav. XX to Jav.XX (how listed in ATG's docs)
+            sm = grp.group().replace(" ", "")
+            shelfmarks.append(sm)
         
-        if "1" in p2:
-            p2 = p2.replace("1", "l")
+        grp = orb_re.search(loc)
+        if grp:
+            # TODO convert ORB. XX to ORB.XX (how listed in ATG's docs)
+            sm = grp.group().replace(" ", "")
+            shelfmarks.append(sm)
         
-        if "l" in p3:
-            p3 = p3.replace("l", "1")
-        if "I" in p3:
-            p3 = p3.replace("I", "1")
-        if "O" in p3:
-            p3 = p3.replace("O", "0")
-        if "S" in p3:
-            p3 = p3.replace("S", "5")
-        
+        grp = siam_re.search(loc)
+        if grp:
+            sm = grp.group()
+            shelfmarks.append(sm)
 
-        return p1.strip() + p2 + p3.strip()
-
-    grp = jav_re.search(bl_loc[0])
-    if grp:
-        # TODO convert Jav. XX to Jav.XX (how listed in ATG's docs)
-        sm = grp.group().replace(" ", "")
-        return sm
-    
-    grp = orb_re.search(bl_loc[0])
-    if grp:
-        # TODO convert ORB. XX to ORB.XX (how listed in ATG's docs)
-        sm = grp.group().replace(" ", "")
-        return sm
-    
-    grp = siam_re.search(bl_loc[0])
-    if grp:
-        sm = grp.group()
-        return sm
-
-    return ""
+    return shelfmarks
         
 
 def process_output_to_csv(json_dict: dict[str, str | dict[str, list[dict[str, str]]]]) -> pd.DataFrame:
@@ -1049,7 +1054,7 @@ def process_output_to_csv(json_dict: dict[str, str | dict[str, list[dict[str, st
             ed = e["edition_name"]
             # known OCR errors
             ed = ed.replace("t", "†").replace(" .•", ".a").replace("IS", "18")
-            shelfmark = extract_bl_shelfmark(e["Location"])
+            shelfmarks = extract_bl_shelfmark(e["Location"])
 
             date = ed.split(".")[0]
             method_of_acquisition = ""
@@ -1095,11 +1100,11 @@ def process_output_to_csv(json_dict: dict[str, str | dict[str, list[dict[str, st
             citation_ref_note = f"Proudfoot 1993: {short_title} {ed}"
             unclassified_text = e.get("unclassified_text", "")
 
-            metadata = pd.DataFrame(
+            metadata_template = pd.DataFrame(
                 data={
                     "short_title": short_title,
                     "edition": ed,
-                    "shelfmark": shelfmark,
+                    "shelfmark": None,
                     "type_of_pub_date": pub_date_type,
                     "date_1": date_1,
                     "date_2": date_2,
@@ -1119,7 +1124,14 @@ def process_output_to_csv(json_dict: dict[str, str | dict[str, list[dict[str, st
                 index = [0]  # ty:ignore[invalid-argument-type]
             )
 
-            metadata_lines.append(metadata)
+            if not shelfmarks:
+                metadata_df = metadata_template.copy()
+                metadata_lines.append(metadata_df)
+            else:
+                for sm in shelfmarks:
+                    metadata_df = metadata_template.copy()
+                    metadata_df.loc[0, "shelfmark"] = sm
+                    metadata_lines.append(metadata_df)
     
     return pd.concat(metadata_lines).set_index(["short_title", "edition"], drop=True)
 
